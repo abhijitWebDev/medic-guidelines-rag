@@ -87,12 +87,27 @@ def test_no_stale_streamlit_references():
     assert not offenders, f"stale Streamlit references in: {offenders}"
 
 
-def test_requirements_carries_no_ui_or_ingest_weight():
-    """requirements.txt is the deploy manifest. streamlit and pymupdf together
-    are ~290 MB against Vercel's 250 MB unzipped limit."""
-    reqs = (ROOT / "requirements.txt").read_text().lower()
+def test_runtime_dependencies_carry_no_ingest_weight():
+    """[project.dependencies] is the deploy manifest -- Vercel installs exactly
+    this set. The PDF parser is 64 MB and belongs in the `ingest` extra, which
+    a deploy never installs; if it creeps back into the runtime list, every
+    cold start pays for it. Vercel's unzipped bundle limit is 250 MB."""
+    toml = (ROOT / "pyproject.toml").read_text()
+    runtime = toml.split("[project.optional-dependencies]")[0].lower()
     for heavy in ("streamlit", "pymupdf", "pyarrow", "pandas"):
-        assert heavy not in reqs, f"{heavy} must not ship in the deploy bundle"
+        assert heavy not in runtime, f"{heavy} must not be a runtime dependency"
+
+
+def test_vercel_entrypoint_ships_the_data_the_query_path_needs():
+    """HybridRetriever reads data/chunks at boot; without it every question is
+    refused. A blacklist-only bundle config would not guarantee it ships."""
+    import json
+    cfg = json.loads((ROOT / "vercel.json").read_text())
+    fn = cfg["functions"]["app.py"]
+    for needed in ("src/**", "data/chunks/**", "data/index_manifest.json"):
+        assert needed in fn["includeFiles"], f"{needed} missing from includeFiles"
+    assert "data/embed_cache/**" in fn["excludeFiles"], "89 MB cache would ship"
+    assert (ROOT / "app.py").is_file(), "Vercel entrypoint app.py is missing"
 
 
 def test_static_page_is_reachable_from_the_installed_package():

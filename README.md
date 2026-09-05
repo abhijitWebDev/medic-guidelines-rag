@@ -214,7 +214,7 @@ src/rag_project/
   cache.py           read-through Redis cache; never fails closed
   api.py             FastAPI service + the web UI it serves
   web/static/        the single-page UI (no build step, no CDN)
-api/index.py         Vercel ASGI entry point
+app.py               Vercel ASGI entry point (root level)
 ```
 
 ## Scope

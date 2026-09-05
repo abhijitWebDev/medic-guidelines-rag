@@ -1,0 +1,16 @@
+# Nothing here is needed to answer a query, and all of it is large.
+# `vercel` uploads the working directory, so without this the 89 MB embed
+# cache and the local virtualenv go over the wire on every deploy.
+.venv/
+data/embed_cache/
+data/lancedb/
+data/raw/
+pdf-data/
+__pycache__/
+*.pyc
+.pytest_cache/
+tests/
+.git/
+
+# The query path needs data/chunks, calibration.json and index_manifest.json.
+# Those are committed and deliberately NOT ignored here.

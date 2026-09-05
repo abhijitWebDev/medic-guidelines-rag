@@ -1,13 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
-    "api/index.py": {
+    "app.py": {
       "memory": 1024,
       "maxDuration": 60,
-      "includeFiles": "{src/**,data/chunks/**,data/calibration.json,data/index_manifest.json}"
+      "includeFiles": "{src/**,data/chunks/**,data/calibration.json,data/index_manifest.json}",
+      "excludeFiles": "{tests/**,**/test_*.py,.venv/**,.pytest_cache/**,**/__pycache__/**,data/embed_cache/**,data/lancedb/**,data/raw/**,pdf-data/**}"
     }
-  },
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/api/index" }
-  ]
+  }
 }

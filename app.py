@@ -1,20 +1,21 @@
-"""Vercel serverless entry point.
+"""Deployment entrypoint.
 
-Vercel treats each module under `api/` as a function and looks for an ASGI
-`app`, so this exists only to make `rag_project` importable and re-export the
-real application from rag_project.api.
+Vercel's Python runtime looks for a top-level `app` in one of a few known
+filenames -- this is one of them -- and routes every request to it. Nothing
+here is needed to run locally; use `rag-serve` for that.
 
-`src` is put on the path rather than installing the package: Vercel builds from
-requirements.txt, and asking pip to build a `uv_build`-backed project inside the
-build container is a second thing that can fail for no benefit here.
+The sys.path line is deliberate. This project uses a src/ layout, so
+`rag_project` is only importable once the project itself is installed
+(which `uv sync` does). Prepending src/ makes the import work either way,
+rather than failing at cold start if the build only installed dependencies.
 """
-
-from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+_SRC = Path(__file__).parent / "src"
+if _SRC.is_dir() and str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
 
 from rag_project.api import app  # noqa: E402
 
