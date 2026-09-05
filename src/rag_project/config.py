@@ -85,6 +85,14 @@ class Settings(BaseSettings):
     # eval harness has actually measured it. Never trust this default.
     confidence_threshold: float = 5.0
 
+    # --- Guardrails ------------------------------------------------------
+    # Bumped by hand whenever a gate prompt or gate rule changes. The
+    # fingerprint below can only see declared configuration, never the gate
+    # code itself, so without this a guardrail fix stays invisible to every
+    # user holding a cached refusal until the TTL expires -- which is exactly
+    # the case a fix is urgent for.
+    guardrails_version: str = "v2"
+
     @property
     def table(self) -> str:
         return self.lancedb_medical_guidelines_table
@@ -99,9 +107,10 @@ class Settings(BaseSettings):
 
         Cached responses are namespaced by this, so switching model, rebuilding
         the index, or recalibrating gate 2 makes old entries unreachable rather
-        than stale. It cannot see edits to *gate logic* -- only to declared
-        configuration -- which is why the eval harness does not read the
-        response cache (see evaluation.run.run_eval).
+        than stale. It cannot see edits to *gate logic* by itself -- only
+        declared configuration -- so `guardrails_version` is the hand-bumped
+        stand-in for those, and the eval harness does not read the response
+        cache at all (see evaluation.run.run_eval).
         """
         material = "|".join(
             str(x)
@@ -115,6 +124,7 @@ class Settings(BaseSettings):
                 self.retrieve_k,
                 self.rerank_top_n,
                 self.confidence_threshold,
+                self.guardrails_version,
             )
         )
         return hashlib.sha256(material.encode()).hexdigest()[:16]

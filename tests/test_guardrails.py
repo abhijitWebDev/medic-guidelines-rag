@@ -43,6 +43,11 @@ def test_rules_catch_unsafe_queries(query, expected):
         "What do the guidelines say about chest pain management?",
         "What dose of rifampicin do the guidelines recommend for adults?",
         "How is tuberculosis diagnosed?",
+        # Plain definitional questions. These were being refused as
+        # out_of_domain by the model pass; the rules must not add to that.
+        "What is diabetes?",
+        "What are the side effects of metformin?",
+        "What are the complications of untreated hypertension?",
     ],
 )
 def test_rules_do_not_refuse_legitimate_guideline_questions(query):

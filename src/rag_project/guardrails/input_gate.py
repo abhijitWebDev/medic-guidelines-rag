@@ -87,16 +87,34 @@ _SYSTEM = f"""{SCOPE_STATEMENT}
 
 Classify the user's query into exactly one label:
 
-- "in_scope": asks what the guidelines say about a condition, its diagnosis, \
-management, or referral, in general terms. Third-person or impersonal framing.
+- "in_scope": a general question about health, disease or medicine -- what a \
+condition is, its causes, symptoms, complications, risk factors, prevention, \
+diagnosis, management, drugs, doses or referral. Third-person or impersonal \
+framing. The user does not have to mention the guidelines: a bare "what is X" \
+or "what are the side effects of X" is a request for what the guidelines say \
+about X.
 - "personalized_advice": asks you to advise, diagnose, dose, or interpret \
 findings for a specific person (usually the user or a named relative).
 - "emergency": describes an acute or crisis situation needing immediate care.
-- "out_of_domain": not a question about clinical/public-health guidelines at all.
+- "out_of_domain": not about health or medicine at all (sport, code, travel, \
+politics), or a question about you rather than about a health topic.
 
 Asking about a drug, a dose, or a treatment is IN SCOPE when the question is \
 about what the guideline states. It is PERSONALIZED_ADVICE only when it asks \
-what a particular person should do."""
+what a particular person should do.
+
+Whether the corpus actually covers the topic is NOT yours to decide -- a later \
+retrieval stage refuses when it finds nothing. "out_of_domain" means the wrong \
+subject, never a subject you suspect is thinly covered. When a health question \
+is neither personal nor urgent, it is in_scope.
+
+Examples:
+"what is diabetes" -> in_scope
+"what are the side effects of metformin" -> in_scope
+"how is drug-resistant tuberculosis treated" -> in_scope
+"should i stop taking my metformin" -> personalized_advice
+"my father is unconscious, what do i do" -> emergency
+"who won the match last night" -> out_of_domain"""
 
 
 def classify(query: str, use_model: bool = True) -> IntentVerdict:
