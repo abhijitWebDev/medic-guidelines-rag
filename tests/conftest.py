@@ -5,7 +5,30 @@ from pathlib import Path
 import pymupdf
 import pytest
 
+from rag_project import security
+from rag_project.cache import reset_cache
+from rag_project.config import get_settings
 from rag_project.models import SourceDoc
+
+
+@pytest.fixture(autouse=True)
+def isolate_from_live_redis(monkeypatch):
+    """No test may touch the real Upstash instance.
+
+    .env carries a live REDIS_URL, so without this the suite reads and writes
+    production keys: rate-limit counters survive between runs (making the
+    limiter tests pass alone and fail together), and cached answers for test
+    queries pile up in a store real users share. Tests that want Redis build
+    their own client -- see tests/test_cache.py.
+    """
+    monkeypatch.setenv("REDIS_URL", "")
+    get_settings.cache_clear()
+    reset_cache()
+    security.reset_rate_limits()
+    yield
+    get_settings.cache_clear()
+    reset_cache()
+    security.reset_rate_limits()
 
 
 def _build_pdf(path: Path, blocks: list[tuple[str, float, bool]]) -> Path:

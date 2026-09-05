@@ -63,6 +63,21 @@ class Settings(BaseSettings):
     # the longest we want a stale-but-valid answer circulating.
     cache_response_ttl_s: int = 24 * 3600
 
+    # --- Access control --------------------------------------------------
+    # Empty disables the gate entirely, which is the default: local work and
+    # the test suite must not need a password. Setting it turns on the login
+    # page and locks every /api route.
+    app_password: str = ""
+    # How long a successful login stays valid.
+    session_ttl_s: int = 7 * 24 * 3600
+    # Questions per IP per window. 0 disables. This is a spend control, not a
+    # security boundary -- the password is the boundary.
+    rate_limit_per_window: int = 30
+    rate_limit_window_s: int = 3600
+    # Vercel sets x-forwarded-for; a client can forge it when nothing sits in
+    # front of the app, so this is off unless the deployment really is proxied.
+    trust_proxy_header: bool = True
+
     # --- Retrieval ------------------------------------------------------
     retrieve_k: int = 20
     rerank_top_n: int = 6

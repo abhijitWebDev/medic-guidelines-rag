@@ -1,4 +1,11 @@
-# Nothing here is needed to answer a query, and all of it is large.
+# Secrets never leave this machine. Vercel injects real config as environment
+# variables, which take precedence over a dotenv file anyway -- so a shipped
+# .env would be dead weight sitting in the bundle with live keys in it.
+.env
+.env.*
+!.env.example
+
+# Nothing below is needed to answer a query, and all of it is large.
 # `vercel` uploads the working directory, so without this the 89 MB embed
 # cache and the local virtualenv go over the wire on every deploy.
 .venv/

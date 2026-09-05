@@ -19,10 +19,11 @@ import json
 from functools import lru_cache
 from pathlib import Path
 
-from fastapi import APIRouter, FastAPI
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, FastAPI, Form, HTTPException, Request, status
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
+from . import security
 from .assistant import Assistant
 from .config import get_settings
 from .indexing.store import StoreError
@@ -55,17 +56,88 @@ class AskRequest(BaseModel):
     trace: bool = Field(default=False, description="include the per-gate trace")
 
 
+def _authed(request: Request) -> bool:
+    return security.request_is_authenticated(request.cookies.get(security.COOKIE_NAME))
+
+
+def require_auth(request: Request) -> None:
+    """Fails closed: a configured password with no valid session means 401."""
+    if not _authed(request):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "authentication required")
+
+
+def _rate_limit(request: Request, scope: str) -> None:
+    ip = security.client_ip(request.headers, request.client.host if request.client else None)
+    verdict = security.check_rate_limit(ip, scope)
+    if not verdict.allowed:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "rate limit reached; each question costs real model calls",
+            headers={"Retry-After": str(verdict.retry_after_s)},
+        )
+
+
+def enforce_rate_limit(request: Request) -> None:
+    """Meters questions, which cost model calls."""
+    _rate_limit(request, "ask")
+
+
+# Deliberately outside the gate: uptime checks must not need a password, and it
+# reveals nothing but liveness.
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
 
 
 @app.get("/", include_in_schema=False)
-def index() -> FileResponse:
+def index(request: Request) -> Response:
+    if not _authed(request):
+        return _login_page()
     return FileResponse(STATIC / "index.html")
 
 
-@api.get("/info")
+def _login_page(error: str = "", code: int = 200) -> HTMLResponse:
+    html = (STATIC / "login.html").read_text()
+    if error:
+        html = html.replace("<!--ERROR-->", f'<div class="error">{error}</div>')
+    return HTMLResponse(html, status_code=code)
+
+
+@app.post("/login", include_in_schema=False)
+def login(request: Request, password: str = Form("")) -> Response:
+    # A brute-forcer costs nothing to run, so login is metered too -- but on
+    # its own counter, so failed logins never consume the question quota.
+    _rate_limit(request, "login")
+    if not security.password_matches(password):
+        return _login_page("Incorrect password.", code=401)
+
+    # Secure only where the connection actually is HTTPS. Hard-coding it would
+    # make the cookie silently undeliverable on http://localhost -- the login
+    # would appear to succeed and then bounce straight back to the form.
+    https = (
+        request.url.scheme == "https"
+        or request.headers.get("x-forwarded-proto", "").split(",")[0].strip() == "https"
+    )
+    resp = RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
+    resp.set_cookie(
+        security.COOKIE_NAME,
+        security.issue_token(),
+        max_age=get_settings().session_ttl_s,
+        httponly=True,    # unreadable from JavaScript
+        secure=https,
+        samesite="lax",   # not sent on cross-site POSTs
+    )
+    return resp
+
+
+@app.post("/logout", include_in_schema=False)
+def logout() -> Response:
+    resp = RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
+    resp.delete_cookie(security.COOKIE_NAME)
+    return resp
+
+
+@api.get("/info", dependencies=[Depends(require_auth)])
 def info() -> dict:
     s = get_settings()
     payload: dict = {
@@ -75,6 +147,7 @@ def info() -> dict:
         "generation_model": s.openai_model,
         "guard_model": s.openai_guard_model,
         "confidence_threshold": s.confidence_threshold,
+        "auth_enabled": security.auth_required(),
     }
     if s.index_manifest_path.exists():
         manifest = json.loads(s.index_manifest_path.read_text())
@@ -95,7 +168,11 @@ def info() -> dict:
     return payload
 
 
-@api.post("/ask", response_model=AnswerResponse)
+@api.post(
+    "/ask",
+    response_model=AnswerResponse,
+    dependencies=[Depends(require_auth), Depends(enforce_rate_limit)],
+)
 def ask(req: AskRequest) -> AnswerResponse:
     try:
         response = _assistant().ask(req.query)

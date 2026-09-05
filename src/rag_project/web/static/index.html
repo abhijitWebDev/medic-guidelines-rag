@@ -5,7 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Medical Guideline Assistant</title>
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🩺</text></svg>">
+<!-- The icon carries its own background on purpose. A bare glyph inherits the
+     browser's tab strip, so a dark-inked emoji disappears against a dark tab
+     and a light one disappears against a light tab; a filled tile is legible
+     on both. Drawn as a path rather than an emoji so it stays crisp at 16px,
+     where emoji font rendering turns to mush. %23 is an escaped '#'. -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%230b63ce'/><path d='M28 14h8v14h14v8H36v14h-8V36H14v-8h14z' fill='white'/></svg>">
 <style>
 /* ==========================================================================
    Tokens. Light is the base; dark overrides only what changes, so a colour
@@ -65,12 +70,22 @@ header { margin-bottom:1.75rem; }
 .brand { display:flex; align-items:center; gap:.7rem; margin-bottom:.55rem; }
 .mark {
   width:38px; height:38px; flex:none; border-radius:11px;
-  background:linear-gradient(145deg, var(--accent), color-mix(in srgb, var(--accent) 62%, #7b4dff));
-  display:grid; place-items:center; font-size:1.1rem;
+  /* Fixed, not var(--accent): the accent lightens in dark mode, which would
+     leave a white glyph sitting on pale blue at ~2:1. The tile keeps its own
+     dark ground in both themes so the mark reads identically. */
+  background:linear-gradient(145deg, #0b63ce, #5b46d6);
+  display:grid; place-items:center;
   box-shadow:0 3px 10px -2px var(--accent-line);
 }
+.mark svg { display:block; }
 h1 { font-size:1.42rem; letter-spacing:-.02em; margin:0; font-weight:650; }
 .tagline { color:var(--dim); font-size:.92rem; margin:0; max-width:56ch; }
+.signout {
+  margin-left:auto; align-self:flex-start; padding:.3rem .7rem; border-radius:999px;
+  border:1px solid var(--line); background:var(--surface); color:var(--dim);
+  font:inherit; font-size:.78rem; cursor:pointer;
+}
+.signout:hover { border-color:var(--accent-line); color:var(--accent-ink); }
 
 /* --- corpus ------------------------------------------------------------ */
 details.corpus {
@@ -281,8 +296,15 @@ button.primary.busy .spinner { display:block; animation:spin .7s linear infinite
 <div class="wrap">
   <header>
     <div class="brand">
-      <div class="mark">🩺</div>
+      <div class="mark" aria-hidden="true">
+        <svg viewBox="0 0 64 64" width="20" height="20">
+          <path d="M28 14h8v14h14v8H36v14h-8V36H14v-8h14z" fill="#fff"/>
+        </svg>
+      </div>
       <h1>Medical Guideline Assistant</h1>
+      <form method="post" action="logout" id="signout" hidden>
+        <button class="signout" type="submit">Sign out</button>
+      </form>
     </div>
     <p class="tagline">
       Grounded answers from official MOHFW Standard Treatment Guidelines.
@@ -603,7 +625,11 @@ document.querySelectorAll(".examples button").forEach((b, i) => {
 
 fetch("api/info")
   .then((r) => r.json())
-  .then((info) => { $("corpus-body").innerHTML = renderCorpus(info); })
+  .then((info) => {
+    $("corpus-body").innerHTML = renderCorpus(info);
+    // Only offer sign-out where there is a session to end.
+    $("signout").hidden = !info.auth_enabled;
+  })
   .catch(() => { $("corpus-body").textContent = "index information unavailable"; });
 </script>
 </body>

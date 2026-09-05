@@ -150,6 +150,30 @@ class Cache:
         except Exception:
             self._trip()
 
+    # --- counters --------------------------------------------------------
+    def incr(self, key: str, ttl_s: int) -> int | None:
+        """Increment a counter and return its new value, or None if Redis is
+        unreachable.
+
+        Deliberately bypasses the in-process tier: a counter shared across
+        server instances is the entire point, and a local copy would let each
+        instance grant its own quota. INCR and EXPIRE go in one pipeline so a
+        rate-limit check costs one Upstash round-trip rather than two.
+        """
+        client = self._redis()
+        if client is None:
+            return None
+        try:
+            pipe = client.pipeline()
+            pipe.incr(key)
+            pipe.expire(key, ttl_s)
+            count, _ = pipe.execute()
+            self._failures = 0
+            return int(count)
+        except Exception:
+            self._trip()
+            return None
+
     # --- typed helpers ---------------------------------------------------
     def get_vector(self, key: str, dim: int) -> np.ndarray | None:
         raw = self.get_bytes(key)

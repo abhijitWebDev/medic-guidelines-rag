@@ -20,6 +20,7 @@ dependencies = [
     "rich>=15.0.0",
     "tiktoken>=0.14.0",
     "uvicorn[standard]>=0.52.4",
+    "python-multipart>=0.0.20",
 ]
 
 [project.optional-dependencies]

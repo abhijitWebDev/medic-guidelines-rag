@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Medical Guideline Assistant</title>
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%230b63ce'/><path d='M28 14h8v14h14v8H36v14h-8V36H14v-8h14z' fill='white'/></svg>">
+<style>
+:root {
+  --bg:#f7f9fb; --surface:#fff; --ink:#0f151c; --ink-2:#3d4854; --dim:#697585;
+  --line:#e2e8f0; --line-2:#cfd8e3; --accent:#0b63ce;
+  --accent-line:rgba(11,99,206,.28);
+  --bad:#c22a30; --bad-soft:rgba(194,42,48,.09);
+  --shadow:0 1px 2px rgba(15,21,28,.05), 0 4px 16px -6px rgba(15,21,28,.10);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:#0a0e13; --surface:#121821; --ink:#e8eef6; --ink-2:#b9c6d6; --dim:#7d8b9d;
+    --line:#1e2733; --line-2:#2b3745; --accent:#5aa2ff;
+    --accent-line:rgba(90,162,255,.32);
+    --bad:#ff6b6b; --bad-soft:rgba(255,107,107,.12);
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 4px 16px -6px rgba(0,0,0,.5);
+  }
+}
+*, *::before, *::after { box-sizing:border-box; }
+body {
+  margin:0; min-height:100vh; background:var(--bg); color:var(--ink);
+  display:grid; place-items:center; padding:1.25rem;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size:15px; line-height:1.6; -webkit-font-smoothing:antialiased;
+}
+.card {
+  width:100%; max-width:370px; background:var(--surface);
+  border:1px solid var(--line); border-radius:14px; padding:1.75rem;
+  box-shadow:var(--shadow);
+}
+.brand { display:flex; align-items:center; gap:.7rem; margin-bottom:1.1rem; }
+.mark {
+  width:38px; height:38px; flex:none; border-radius:11px;
+  background:linear-gradient(145deg, #0b63ce, #5b46d6);
+  display:grid; place-items:center;
+  box-shadow:0 3px 10px -2px var(--accent-line);
+}
+.mark svg { display:block; }
+h1 { font-size:1.05rem; margin:0; letter-spacing:-.01em; font-weight:650; }
+p.note { color:var(--dim); font-size:.87rem; margin:0 0 1.25rem; }
+label { display:block; font-size:.8rem; font-weight:600; color:var(--ink-2); margin-bottom:.35rem; }
+input {
+  width:100%; padding:.6rem .7rem; border:1px solid var(--line-2); border-radius:9px;
+  background:var(--bg); color:var(--ink); font:inherit; font-size:.95rem;
+}
+input:focus { outline:2px solid var(--accent); outline-offset:-1px; border-color:transparent; }
+button {
+  width:100%; margin-top:.85rem; padding:.6rem 1rem; border:0; border-radius:9px;
+  background:var(--accent); color:#fff; font:inherit; font-weight:600; cursor:pointer;
+}
+button:hover { filter:brightness(1.08); }
+.error {
+  background:var(--bad-soft); border:1px solid var(--bad); color:var(--ink);
+  border-radius:9px; padding:.6rem .8rem; font-size:.87rem; margin-bottom:1rem;
+}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">
+      <div class="mark" aria-hidden="true">
+        <svg viewBox="0 0 64 64" width="20" height="20">
+          <path d="M28 14h8v14h14v8H36v14h-8V36H14v-8h14z" fill="#fff"/>
+        </svg>
+      </div>
+      <h1>Medical Guideline Assistant</h1>
+    </div>
+    <p class="note">This instance is private. Enter the access password to continue.</p>
+    <!--ERROR-->
+    <form method="post" action="login">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password"
+             autofocus required>
+      <button type="submit">Sign in</button>
+    </form>
+  </div>
+</body>
+</html>
