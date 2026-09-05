@@ -1,0 +1,22 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+data/raw/*
+!data/raw/.gitkeep
+data/chunks/*
+!data/chunks/.gitkeep
+data/lancedb/
+.env
+data/embed_cache/
+data/index_manifest.json
+data/calibration.json
+
+# Source PDFs (168MB) - kept out of git; data/raw/ symlinks point here
+pdf-data/

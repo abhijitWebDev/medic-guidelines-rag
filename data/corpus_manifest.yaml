@@ -1,0 +1,215 @@
+source: MOHFW Standard Treatment Guidelines
+source_page: https://clinicalestablishments.mohfw.gov.in/en/standard-treatment-guidelines
+documents:
+- doc_id: antimicrobial-guidelines
+  title: National Treatment Guidelines for Antimicrobial Use in Infectious Diseases
+  filename: antimicrobial_guidelines.pdf
+  url: ''
+  publisher: MOHFW, Government of India
+  specialty: Infectious Disease
+  version: null
+  published: null
+  license: Government of India public health advisory
+  sha256: 15861464a570eb0d4aeb0cce7f88047e7361e2a36b32cf604a1418f3f83b817a
+- doc_id: ari-children-quick-ref
+  title: Standard Treatment Guidelines - Management of Common Respiratory Infections
+    in Children (Quick Reference)
+  filename: ari_children_quick_ref.pdf
+  url: ''
+  publisher: MOHFW, Government of India
+  specialty: Paediatrics
+  version: null
+  published: null
+  license: Government of India public health advisory
+  sha256: 5453d568e787c9f1bb5f4e8e3ad04af6e016d3d015589173b9ac13e167eb1673
+- doc_id: ayurveda
+  title: Standard Treatment Guidelines - Ayurveda
+  filename: ayurveda.pdf
+  url: ''
+  publisher: MOHFW, Government of India
+  specialty: AYUSH
+  version: null
+  published: null
+  license: Government of India public health advisory
+  sha256: 153d5f8af97e8e1d5dd7ca4879bafdf6d1429e0cff5c46c57bda02afe7814aa5
+- doc_id: cardiovascular-diseases
+  title: Guidelines for the Management of Cardiovascular Diseases in India (Part 1)
+  filename: cardiovascular_diseases.pdf
+  url: ''
+  publisher: MOHFW, Government of India
+  specialty: Cardiology
+  version: null
+  published: null
+  license: Government of India public health advisory
+  sha256: 92ed8b17fbe6725d473b4d1e3d64650bc5998cb9636d74cb79a3597a5fa68cad
+- doc_id: critical-care
+  title: Guidelines For The Management Of Critical Care
+  filename: critical_care.pdf
+  url: ''
+  publisher: MOHFW, Government of India
+  specialty: Critical Care
+  version: null
+  published: null
+  license: Government of India public health advisory
+  sha256: f8cb9cf5293798812b2725c59e0cab19c4f89cd7792314cef13e2fce1bf0cd84
+- doc_id: dengue
+  title: Dengue
+  filename: dengue.pdf
+  url: ''
+  publisher: MOHFW, Government of India
+  specialty: Infectious Disease
+  version: null
+  published: null
+  license: Government of India public health advisory
+  sha256: 89da687c8a0f4f535740499b180ab17d8091aeadf8ea5e4138da99bbed12ecaa
+- doc_id: general-surgery
+  title: Standard Treatment Guidelines General Surgery
+  filename: general_surgery.pdf
+  url: ''
+  publisher: MOHFW, Government of India
+  specialty: Surgery
+  version: null
+  published: null
+  license: Government of India public health advisory
+  sha256: 7e47b613d379fb3031347bccedd6acec08f7f26f2d4242a0d26110ceb9e64b94
+- doc_id: hypertension-full
+  title: Background Document Hypertension India
+  filename: hypertension_full.pdf
+  url: ''
+  publisher: MOHFW, Government of India
+  specialty: Cardiology
+  version: null
+  published: null
+  license: Government of India public health advisory
+  sha256: 8388906c4f3ce1beb4355d9c5fcc16f25dd96580532a78a5ab3e27e8f41b49da
+- doc_id: hypertension-quick-ref
+  title: Standard Treatment Guidelines - Hypertension (Quick Reference)
+  filename: hypertension_quick_ref.pdf
+  url: ''
+  publisher: MOHFW, Government of India
+  specialty: Cardiology
+  version: null
+  published: null
+  license: Government of India public health advisory
+  sha256: 62de7ccc3b98e5e8b368cdab9abcf3e89cf6f1fe4e8173be6b594d448145cb1b
+- doc_id: malaria
+  title: Diagnosis and Treatment of Malaria
+  filename: malaria.pdf
+  url: ''
+  publisher: MOHFW, Government of India
+  specialty: Infectious Disease
+  version: null
+  published: null
+  license: Government of India public health advisory
+  sha256: 3f6e8f9435cbe3671f70aa8ea8c47c18bcd8be23afdf180a8021edb1c914a766
+- doc_id: neurology
+  title: Standard Treatment Guidelines - Neurology
+  filename: neurology.pdf
+  url: ''
+  publisher: MOHFW, Government of India
+  specialty: Neurology
+  version: null
+  published: null
+  license: Government of India public health advisory
+  sha256: d29c533e487034dc238ff278d6516a079110ad0b0478e35977fcc1ba8721c027
+- doc_id: npcdcs-manual
+  title: National Programme for Prevention and Control of Cancer, Diabetes, Cardiovascular
+    Disease and Stroke (NPCDCS)
+  filename: npcdcs_manual.pdf
+  url: ''
+  publisher: MOHFW, Government of India
+  specialty: Public Health
+  version: null
+  published: null
+  license: Government of India public health advisory
+  sha256: f45a65f2404fdcfcbcf5c3d943942af81c2662d13fa6c34ec77f8c6017acb181
+- doc_id: obstetrics-gynaecology
+  title: Standard Treatment Guidelines Obstetrics & Gynaecology
+  filename: obstetrics_gynaecology.pdf
+  url: ''
+  publisher: MOHFW, Government of India
+  specialty: Obstetrics & Gynaecology
+  version: null
+  published: null
+  license: Government of India public health advisory
+  sha256: 105ef97b460f3f1c8f1232884b65c33739322e753aaaf14422393df741542517
+- doc_id: oncology
+  title: Standard Treatment Guidelines Oncology
+  filename: oncology.pdf
+  url: ''
+  publisher: MOHFW, Government of India
+  specialty: Oncology
+  version: null
+  published: null
+  license: Government of India public health advisory
+  sha256: c8cfc345f482073bc6d80b0d96ae86a2ef8aed0de5a4705c38c450b8f19b6cc8
+- doc_id: orthopaedics
+  title: Standard Treatment Guidelines For Orthopaedics
+  filename: orthopaedics.pdf
+  url: ''
+  publisher: MOHFW, Government of India
+  specialty: Orthopaedics
+  version: null
+  published: null
+  license: Government of India public health advisory
+  sha256: 87c4822655783fc609eb986b0bfa1dc0ff9033e924a2f06c13ffc680572a67f8
+- doc_id: paediatrics
+  title: Standard Treatment Guidelines Pediatrics & Pediatric Surgery
+  filename: paediatrics.pdf
+  url: ''
+  publisher: MOHFW, Government of India
+  specialty: Paediatrics
+  version: null
+  published: null
+  license: Government of India public health advisory
+  sha256: cbe6519dc4cf024682115a42630c4f3d79fd5f2e0a29be32c2760c7eed0ebab7
+- doc_id: respiratory-medicine
+  title: Standard Treatment Guidelines - Medicine (Respiratory)
+  filename: respiratory_medicine.pdf
+  url: ''
+  publisher: MOHFW, Government of India
+  specialty: Respiratory Medicine
+  version: null
+  published: null
+  license: Government of India public health advisory
+  sha256: aba7ab6b814b85867043639d11f0b56efea0c3f385d85abe24addeb2cc690085
+- doc_id: siddha
+  title: Standard Treatment Guidelines - Siddha
+  filename: siddha.pdf
+  url: ''
+  publisher: MOHFW, Government of India
+  specialty: AYUSH
+  version: null
+  published: null
+  license: Government of India public health advisory
+  sha256: da0dd19de679ff1cde0b07ba4fd00f8942b6e0dfa90c7c4ba81009ce7803e34e
+- doc_id: snakebite-full
+  title: Standard Treatment Guidelines - Snakebite
+  filename: snakebite_full.pdf
+  url: ''
+  publisher: MOHFW, Government of India
+  specialty: Toxicology
+  version: null
+  published: null
+  license: Government of India public health advisory
+  sha256: 5b7ea408dade69aae0c9ab8a7536cec29bafbb190586e144bc1066fd8d1e18d9
+- doc_id: snakebite-quick-ref
+  title: Management of Snake Bite
+  filename: snakebite_quick_ref.pdf
+  url: ''
+  publisher: MOHFW, Government of India
+  specialty: Toxicology
+  version: null
+  published: null
+  license: Government of India public health advisory
+  sha256: 80d500ce992500d8807efafd6864cd3518103caf2e6149755f31fe87be26cda6
+- doc_id: tb-standards
+  title: Standards for TB Care in India
+  filename: tb_standards.pdf
+  url: ''
+  publisher: MOHFW, Government of India
+  specialty: Respiratory Medicine
+  version: null
+  published: null
+  license: Government of India public health advisory
+  sha256: 39a1e8530dea238f0219284771ebba2eef4796596f1d46ceeeca71bc736c7c8f
