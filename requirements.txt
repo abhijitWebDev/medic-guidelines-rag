@@ -1,7 +1,7 @@
 # Runtime dependencies for the deployed API + web UI.
-# Mirrors [project.dependencies] in pyproject.toml -- NOT the ingest (pymupdf)
-# or legacy Streamlit extras, which together are ~290 MB and are not on the
-# query path. Vercel's unzipped bundle limit is 250 MB.
+# Mirrors [project.dependencies] in pyproject.toml -- NOT the ingest extra,
+# whose PDF parser is 64 MB and is never touched on the query path.
+# Vercel's unzipped bundle limit is 250 MB.
 fastapi>=0.141.1
 httpx>=0.28.1
 openai>=3.5.0

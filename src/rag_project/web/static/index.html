@@ -553,7 +553,8 @@ async function ask(query) {
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
     const data = await res.json();
     disclaimer = data.disclaimer || disclaimer;
-    // Only the newest result carries the disclaimer, as in the Streamlit UI.
+    // Only the newest result carries the disclaimer; repeating it under every
+    // answer trains people to stop reading it.
     $("results").querySelectorAll(".disclaimer").forEach((el) => el.remove());
     $("results").insertAdjacentHTML("afterbegin",
       renderResult(data, (performance.now() - started) / 1000, disclaimer));

@@ -14,8 +14,8 @@ Two rules govern this module, and they are the inverse of the rules in llm.py.
    breaker that stops us paying the timeout on every subsequent query.
 
 An in-process LRU sits in front of Redis. It exists for the eval harness and
-for Streamlit reruns, which ask the same question many times in one process and
-should not pay the network to be told the same thing.
+for repeated asks within one server process, which should not pay the network
+to be told the same thing.
 """
 
 from __future__ import annotations

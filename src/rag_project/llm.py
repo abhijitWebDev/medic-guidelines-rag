@@ -31,9 +31,9 @@ class LLMError(RuntimeError):
 # pin a transient API outage into Redis for the whole TTL. Each fail-closed
 # path records itself here so the caller can tell the two apart.
 #
-# A ContextVar rather than a global: Streamlit and FastAPI both run concurrent
-# requests in one process, and one request's outage must not suppress caching
-# for another's perfectly good answer.
+# A ContextVar rather than a global: the API serves concurrent requests in one
+# process, and one request's outage must not suppress caching for another's
+# perfectly good answer.
 _degraded: ContextVar[tuple[str, ...]] = ContextVar("llm_degraded", default=())
 
 

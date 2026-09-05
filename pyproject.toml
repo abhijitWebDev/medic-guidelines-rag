@@ -25,14 +25,10 @@ dependencies = [
 [project.optional-dependencies]
 # Building the index from PDFs. Not needed to answer questions, and 64 MB.
 ingest = ["pymupdf>=1.28.2"]
-# The original Streamlit UI, superseded by the static page in web/static
-# but kept working. Pulls in pyarrow+pandas+altair, ~250 MB.
-ui = ["streamlit>=1.62.0"]
 
 [project.scripts]
 rag = "rag_project.cli:main"
 rag-serve = "rag_project.api:main"
-rag-ui = "rag_project.ui.launch:main"
 
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]
@@ -46,5 +42,4 @@ dev = [
     "pytest>=9.1.1",
     "httpx>=0.28.1",      # fastapi TestClient
     "pymupdf>=1.28.2",   # ingest tests
-    "streamlit>=1.62.0", # ui renderer tests
 ]

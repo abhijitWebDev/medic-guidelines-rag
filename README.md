@@ -129,21 +129,23 @@ uv run rag eval init            # starter question set
 uv run rag eval calibrate --write   # tune the gate-2 threshold from data
 uv run rag eval run             # full pipeline metrics
 
-# 6. Serve.
-uv run rag-ui                   # Streamlit UI  -> http://localhost:8501
-uv run rag-serve                # JSON API      -> http://127.0.0.1:8000/docs
+# 6. Serve. One process serves both the web UI and the JSON API.
+uv run rag-serve                # UI  -> http://127.0.0.1:8000/
+                                # API -> http://127.0.0.1:8000/docs
 ```
 
 ## UI
 
-`uv run rag-ui` starts a two-page Streamlit app.
+`uv run rag-serve` serves a single static page at `/` that talks to the same
+`/api/*` endpoints any other client would use. It is deliberately not a
+template and loads nothing from a CDN: the whole page is one 28 KB file, so the
+runtime is `fastapi` plus stdlib and a locked-down network changes nothing.
 
-**Assistant** — question box, answer with highlighted citation markers, sources
-with section and page, and a **Pipeline** panel under every result showing what
-each stage decided:
+Question box, answer with citation markers, sources with section and page, and
+a **Pipeline** panel under every result showing what each stage decided:
 
 ```
-✕  Gate 1 · intent        personalized_advice · rule match — asks what the user should do
+●  Gate 1 · intent        personalized_advice · rule match — asks what the user should do
 ○  Retrieve               not reached
 ○  Rerank                 not reached
 ○  Gate 2 · confidence    not reached
@@ -155,18 +157,18 @@ That panel is the reason the UI exists. A chat box shows you an answer; it
 cannot show you that a question was refused *before retrieval ran*, or that the
 reranker scored every passage 0.0. Those are the decisions worth seeing.
 
-**Evaluation** — read-only view of the last `rag eval run`. Deliberately has no
-"run" button: a run costs real API calls and takes minutes, which is too easy to
-trigger by accident from a UI.
+Two details the panel surfaces that the API alone does not make obvious:
 
-Two implementation notes worth keeping in mind if you extend it:
+- **`⚠ degraded`** — a stage fell back because a model was unreachable, so the
+  refusal is about the service rather than the question. From the outside these
+  two look identical, and only one of them is your fault.
+- **`⚡ served from cache`** — the answer came from Redis rather than a fresh
+  pipeline run.
 
-- `@st.cache_resource` on the assistant is **required**, not an optimisation.
-  Streamlit re-runs the script on every interaction, and `Assistant.build()`
-  reads every chunk and rebuilds the BM25 index.
-- Page scripts under `ui/views/` must use **absolute** imports. Streamlit
-  executes them as top-level scripts, so relative imports have no parent
-  package and raise `ImportError` at load.
+Hovering a `[C1]` marker lights the source it refers to; clicking scrolls to it.
+
+Evaluation has no UI on purpose. A run costs real API calls and takes minutes,
+which is too easy to trigger by accident from a browser — use `rag eval run`.
 
 `corpus scan` leaves `url`, `specialty`, and `version` blank rather than
 guessing. Fill them in by hand — they end up in citations, and blank provenance
@@ -209,7 +211,10 @@ src/rag_project/
   retrieval/         rewrite, hybrid search, rerank
   guardrails/        policy + the three gates
   evaluation/        eval set, runner, threshold calibration
-  api.py             FastAPI service
+  cache.py           read-through Redis cache; never fails closed
+  api.py             FastAPI service + the web UI it serves
+  web/static/        the single-page UI (no build step, no CDN)
+api/index.py         Vercel ASGI entry point
 ```
 
 ## Scope
