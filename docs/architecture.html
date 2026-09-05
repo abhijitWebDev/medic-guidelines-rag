@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Medical Guideline Assistant — Architecture</title>
+<style>
+@page { size: A4; margin: 17mm 15mm 15mm; }
+
+:root {
+  --ink:#15202b; --ink-2:#3f4c5a; --dim:#6b7885; --faint:#9aa6b2;
+  --line:#dde4ec; --line-2:#c3cedb;
+  --accent:#0b63ce; --accent-soft:#eef4fd;
+  --ok:#137a3b; --bad:#c22a30; --warn:#9a6206;
+  --code-bg:#f5f8fb;
+}
+* { box-sizing:border-box; }
+body {
+  margin:0; color:var(--ink); background:#fff;
+  font-family:"Segoe UI", "DejaVu Sans", system-ui, -apple-system, Helvetica, Arial, sans-serif;
+  font-size:9.6pt; line-height:1.55;
+}
+code, pre, .mono { font-family:"DejaVu Sans Mono", "Liberation Mono", Consolas, monospace; }
+
+h1 { font-size:23pt; letter-spacing:-.02em; margin:0 0 .15em; line-height:1.15; }
+h2 {
+  font-size:13pt; letter-spacing:-.01em; margin:1.9em 0 .6em;
+  padding-bottom:.28em; border-bottom:2px solid var(--accent);
+  break-after:avoid;
+}
+h3 { font-size:10.4pt; margin:1.35em 0 .4em; color:var(--ink); break-after:avoid; }
+h4 { font-size:9.4pt; margin:1.1em 0 .3em; color:var(--ink-2); break-after:avoid; }
+p { margin:0 0 .65em; }
+ul, ol { margin:.3em 0 .75em; padding-left:1.15em; }
+li { margin:.2em 0; }
+strong { font-weight:600; }
+a { color:var(--accent); text-decoration:none; }
+
+.lead { font-size:10.6pt; color:var(--ink-2); line-height:1.6; }
+.muted { color:var(--dim); }
+.small { font-size:8.6pt; }
+
+/* --- cover ------------------------------------------------------------ */
+.cover { border-bottom:3px solid var(--accent); padding-bottom:1.1em; margin-bottom:1.4em; }
+.eyebrow {
+  font-size:8pt; text-transform:uppercase; letter-spacing:.14em;
+  color:var(--accent); font-weight:700; margin-bottom:.5em;
+}
+.subtitle { font-size:11.5pt; color:var(--dim); margin:.2em 0 0; }
+.factbar { display:flex; gap:0; margin-top:1.1em; border:1px solid var(--line); border-radius:6px; overflow:hidden; }
+.fact { flex:1; padding:.5em .7em; border-right:1px solid var(--line); }
+.fact:last-child { border-right:0; }
+.fact b { display:block; font-size:13pt; line-height:1.2; letter-spacing:-.02em; }
+.fact span { font-size:7.6pt; text-transform:uppercase; letter-spacing:.07em; color:var(--dim); }
+
+/* --- blocks ----------------------------------------------------------- */
+pre {
+  background:var(--code-bg); border:1px solid var(--line); border-left:3px solid var(--line-2);
+  border-radius:5px; padding:.6em .8em; font-size:8.1pt; line-height:1.5;
+  overflow:hidden; white-space:pre-wrap; margin:.5em 0 .9em; break-inside:avoid;
+}
+pre.tree { line-height:1.45; break-inside:auto; }
+code:not(pre code) {
+  background:var(--code-bg); border:1px solid var(--line); border-radius:3px;
+  padding:.04em .3em; font-size:.9em;
+}
+table { width:100%; border-collapse:collapse; margin:.5em 0 1em; font-size:8.7pt; }
+th {
+  text-align:left; font-size:7.6pt; text-transform:uppercase; letter-spacing:.06em;
+  color:var(--dim); border-bottom:1.5px solid var(--line-2); padding:.35em .5em .3em;
+  font-weight:700;
+}
+td { padding:.38em .5em; border-bottom:1px solid var(--line); vertical-align:top; }
+tr { break-inside:avoid; }
+td.k { white-space:nowrap; font-family:"DejaVu Sans Mono", monospace; font-size:8.1pt; color:var(--ink); }
+td.n { text-align:right; color:var(--dim); font-variant-numeric:tabular-nums; white-space:nowrap; }
+
+.note {
+  border-left:3px solid var(--accent); background:var(--accent-soft);
+  padding:.55em .8em; border-radius:0 5px 5px 0; margin:.7em 0 1em; break-inside:avoid;
+}
+.note.warn { border-color:var(--warn); background:#fdf6e7; }
+.note .t { font-weight:700; font-size:8.4pt; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-2); }
+
+.pill {
+  display:inline-block; border-radius:999px; padding:.06em .5em; font-size:7.6pt;
+  font-weight:700; letter-spacing:.03em; vertical-align:.06em;
+}
+.pill.ok { background:#e4f4e9; color:var(--ok); }
+.pill.bad { background:#fdeaea; color:var(--bad); }
+.pill.warn { background:#fdf3e0; color:var(--warn); }
+
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:0 1.4em; }
+.break { break-before:page; }
+.keep { break-inside:avoid; }
+figure { margin:.6em 0 1.1em; break-inside:avoid; }
+figcaption { font-size:8pt; color:var(--dim); margin-top:.35em; }
+svg { display:block; max-width:100%; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="eyebrow">Architecture &amp; Implementation Reference</div>
+  <h1>Medical Guideline Assistant</h1>
+  <p class="subtitle">A retrieval-augmented assistant that answers only from official
+     MOHFW Standard Treatment Guidelines — and refuses when it cannot.</p>
+  <div class="factbar">
+    <div class="fact"><b>20</b><span>documents</span></div>
+    <div class="fact"><b>3,414</b><span>chunks</span></div>
+    <div class="fact"><b>3</b><span>safety gates</span></div>
+    <div class="fact"><b>100</b><span>tests</span></div>
+    <div class="fact"><b>~5.5k</b><span>lines of python</span></div>
+  </div>
+</div>
+
+<p class="lead">
+This system answers clinical questions strictly from a curated corpus of Indian
+government treatment guidelines, with a citation behind every claim. Its defining
+property is not that it answers well — it is that it <strong>declines
+predictably</strong>. Three independent gates sit around the model, and any one of
+them can stop an answer from reaching the user.
+</p>
+
+<h2>1. What the system is</h2>
+
+<p>
+A user asks a question in a browser. The system decides whether the question is
+even in scope, retrieves passages from a vector store and a lexical index, scores
+how well each passage actually answers the question, refuses if none of them do,
+generates an answer constrained to those passages, and then verifies the generated
+text against them before showing it. The same pipeline backs a CLI and a JSON API.
+</p>
+
+<p>
+The corpus is deliberately narrow: 20 documents, hash-verified against a manifest,
+covering tuberculosis, hypertension, malaria, antimicrobial use, critical care,
+paediatrics, obstetrics and related areas. Anything outside that is refused rather
+than answered from the model's own knowledge.
+</p>
+
+<h3>Three questions the design keeps answering</h3>
+<table>
+  <tr><td style="width:33%"><strong>Is this question in scope?</strong></td>
+      <td>Gate&nbsp;1 decides before any retrieval runs, so an out-of-scope query
+          never costs an embedding call and a personal one never has guideline
+          text pulled up beside it.</td></tr>
+  <tr><td><strong>Do we actually have the answer?</strong></td>
+      <td>Gate&nbsp;2 reads an <em>absolute</em> relevance score, not a ranking.
+          The best of five irrelevant passages still ranks first; only an absolute
+          score can express “nothing here answers this”.</td></tr>
+  <tr><td><strong>Is the answer supported?</strong></td>
+      <td>Gate&nbsp;3 re-reads the draft against the passages it cites, checking
+          citations, numbers, claim support and framing before release.</td></tr>
+</table>
+
+<h2>2. The pipeline</h2>
+
+<figure>
+<svg viewBox="0 0 720 300" width="720" height="300" font-family="Segoe UI, DejaVu Sans, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#6b7885"/>
+    </marker>
+  </defs>
+  <!-- row 1 -->
+  <rect x="4" y="16" width="112" height="44" rx="7" fill="#eef4fd" stroke="#0b63ce" stroke-width="1.2"/>
+  <text x="60" y="35" font-size="11" font-weight="700" text-anchor="middle" fill="#15202b">Question</text>
+  <text x="60" y="49" font-size="8.5" text-anchor="middle" fill="#6b7885">browser / CLI / API</text>
+
+  <rect x="150" y="16" width="126" height="44" rx="7" fill="#fff" stroke="#c22a30" stroke-width="1.4"/>
+  <text x="213" y="34" font-size="10.5" font-weight="700" text-anchor="middle" fill="#c22a30">Gate 1 · intent</text>
+  <text x="213" y="48" font-size="8.5" text-anchor="middle" fill="#6b7885">rules, then model</text>
+
+  <rect x="310" y="16" width="118" height="44" rx="7" fill="#fff" stroke="#c3cedb"/>
+  <text x="369" y="34" font-size="10.5" font-weight="700" text-anchor="middle" fill="#15202b">Retrieve</text>
+  <text x="369" y="48" font-size="8.5" text-anchor="middle" fill="#6b7885">dense + BM25 → RRF</text>
+
+  <rect x="462" y="16" width="112" height="44" rx="7" fill="#fff" stroke="#c3cedb"/>
+  <text x="518" y="34" font-size="10.5" font-weight="700" text-anchor="middle" fill="#15202b">Rerank</text>
+  <text x="518" y="48" font-size="8.5" text-anchor="middle" fill="#6b7885">absolute 0–10</text>
+
+  <rect x="608" y="16" width="108" height="44" rx="7" fill="#fff" stroke="#c22a30" stroke-width="1.4"/>
+  <text x="662" y="34" font-size="10.5" font-weight="700" text-anchor="middle" fill="#c22a30">Gate 2</text>
+  <text x="662" y="48" font-size="8.5" text-anchor="middle" fill="#6b7885">confidence</text>
+
+  <line x1="118" y1="38" x2="146" y2="38" stroke="#6b7885" marker-end="url(#a)"/>
+  <line x1="278" y1="38" x2="306" y2="38" stroke="#6b7885" marker-end="url(#a)"/>
+  <line x1="430" y1="38" x2="458" y2="38" stroke="#6b7885" marker-end="url(#a)"/>
+  <line x1="576" y1="38" x2="604" y2="38" stroke="#6b7885" marker-end="url(#a)"/>
+
+  <!-- wrap down -->
+  <path d="M662 62 L662 88 L60 88 L60 112" fill="none" stroke="#6b7885" marker-end="url(#a)"/>
+
+  <!-- row 2 -->
+  <rect x="4" y="118" width="112" height="44" rx="7" fill="#fff" stroke="#c3cedb"/>
+  <text x="60" y="136" font-size="10.5" font-weight="700" text-anchor="middle" fill="#15202b">Generate</text>
+  <text x="60" y="150" font-size="8.5" text-anchor="middle" fill="#6b7885">structured claims</text>
+
+  <rect x="150" y="118" width="126" height="44" rx="7" fill="#fff" stroke="#c22a30" stroke-width="1.4"/>
+  <text x="213" y="136" font-size="10.5" font-weight="700" text-anchor="middle" fill="#c22a30">Gate 3 · output</text>
+  <text x="213" y="150" font-size="8.5" text-anchor="middle" fill="#6b7885">verify vs. sources</text>
+
+  <rect x="310" y="118" width="118" height="44" rx="7" fill="#e4f4e9" stroke="#137a3b" stroke-width="1.2"/>
+  <text x="369" y="136" font-size="10.5" font-weight="700" text-anchor="middle" fill="#137a3b">Answer</text>
+  <text x="369" y="150" font-size="8.5" text-anchor="middle" fill="#6b7885">+ citations + trace</text>
+
+  <line x1="118" y1="140" x2="146" y2="140" stroke="#6b7885" marker-end="url(#a)"/>
+  <line x1="278" y1="140" x2="306" y2="140" stroke="#6b7885" marker-end="url(#a)"/>
+
+  <!-- refusal rail -->
+  <rect x="462" y="112" width="254" height="56" rx="7" fill="#fdeaea" stroke="#c22a30" stroke-dasharray="3 2"/>
+  <text x="589" y="132" font-size="10" font-weight="700" text-anchor="middle" fill="#c22a30">Refusal (HTTP 200)</text>
+  <text x="589" y="146" font-size="8.2" text-anchor="middle" fill="#6b7885">standard message + refusal_reason</text>
+  <text x="589" y="158" font-size="8.2" text-anchor="middle" fill="#6b7885">any gate can end the request here</text>
+
+  <path d="M213 62 L213 78 L520 78 L520 108" fill="none" stroke="#c22a30" stroke-dasharray="3 2" marker-end="url(#a)"/>
+  <path d="M662 62 L698 62 L698 108" fill="none" stroke="#c22a30" stroke-dasharray="3 2" marker-end="url(#a)"/>
+  <path d="M213 164 L213 190 L580 190 L580 172" fill="none" stroke="#c22a30" stroke-dasharray="3 2" marker-end="url(#a)"/>
+
+  <!-- caching -->
+  <rect x="4" y="212" width="712" height="52" rx="7" fill="#f5f8fb" stroke="#c3cedb"/>
+  <text x="18" y="231" font-size="9.5" font-weight="700" fill="#15202b">Cache (Upstash Redis)</text>
+  <text x="18" y="246" font-size="8.4" fill="#6b7885">L0 query embeddings · L1 whole responses, keyed by a pipeline fingerprint · read-through, never fails closed</text>
+  <text x="18" y="258" font-size="8.4" fill="#6b7885">A fail-closed refusal is never cached: an outage must not be pinned into Redis for the whole TTL.</text>
+</svg>
+<figcaption>Every exit produces the same <code>Response</code> object. A refusal is a
+200 with <code>answered: false</code>, never an HTTP error — refusing is a correct
+outcome, and a 4xx would invite callers to retry around it.</figcaption>
+</figure>
+
+<h2>3. Repository structure</h2>
+
+<pre class="tree">Rag-project/
+├── app.py                      Vercel ASGI entrypoint — puts src/ on the path, re-exports the app
+├── vercel.json                 function config: bundle contents, memory, max duration
+├── .vercelignore               keeps .env, .venv and the 89 MB embed cache out of uploads
+├── pyproject.toml              runtime deps; `ingest` extra holds the 64 MB PDF parser
+│
+├── src/rag_project/
+│   ├── config.py               every tunable; thresholds load from data/calibration.json
+│   ├── models.py               shared schemas — Chunk, Retrieved, Claim, Response
+│   ├── llm.py                  OpenAI wrapper; failures raise, callers decide
+│   ├── cache.py                two-tier read-through cache over Upstash
+│   ├── security.py             password gate (fails closed) + rate limit (fails open)
+│   ├── assistant.py            the pipeline, end to end
+│   ├── api.py                  FastAPI service and the web UI it serves
+│   ├── cli.py                  `rag` — corpus, ingest, index, ask, eval, store
+│   │
+│   ├── corpus/manifest.py      sha256 document allow-list
+│   ├── ingest/                 PDF → sections → chunks
+│   │   ├── parse.py            layout-aware PDF parsing (pymupdf, imported lazily)
+│   │   ├── text.py             plain-text source handling
+│   │   ├── chunk.py            section-aware chunking, 320 tokens / 48 overlap
+│   │   └── pipeline.py         orchestration + load_chunks() used at query time
+│   ├── indexing/
+│   │   ├── embed.py            OpenAI embeddings; npz for ingest, Redis for queries
+│   │   ├── bm25.py             lexical index + reciprocal rank fusion
+│   │   ├── store.py            LanceDB over plain HTTP (httpx, no heavy client)
+│   │   └── build.py            embeds chunks and pushes the table
+│   ├── retrieval/
+│   │   ├── rewrite.py          curated abbreviation glossary; expansions are additive
+│   │   ├── search.py           hybrid dense + lexical retrieval, fused on rank
+│   │   └── rerank.py           absolute 0–10 relevance scoring
+│   ├── generation/
+│   │   ├── prompt.py           the grounded-answer system prompt
+│   │   └── generate.py         structured generation into GroundedAnswer
+│   ├── guardrails/
+│   │   ├── policy.py           scope statement, disclaimer, refusal messages
+│   │   ├── input_gate.py       Gate 1 — intent classification
+│   │   ├── confidence.py       Gate 2 — absolute-score threshold
+│   │   └── output_gate.py      Gate 3 — citations, numbers, support, framing
+│   ├── evaluation/             eval set, runner, threshold calibration
+│   └── web/static/
+│       ├── index.html          the single-page UI (no build step, no CDN)
+│       └── login.html          password gate page
+│
+├── data/
+│   ├── corpus_manifest.yaml    the allow-list: a PDF not listed here is never ingested
+│   ├── chunks/*.jsonl          committed — BM25 reads these at boot
+│   ├── calibration.json        committed — the measured gate-2 threshold
+│   ├── index_manifest.json     committed — what produced the table being queried
+│   ├── embed_cache/            89 MB, gitignored, ingest only
+│   └── raw/                    source PDFs, gitignored
+│
+└── tests/                      100 tests across 7 files</pre>
+
+<h3>Why some data files are committed</h3>
+<p>
+<code>data/chunks/</code>, <code>calibration.json</code> and
+<code>index_manifest.json</code> are tracked deliberately. The lexical half of
+hybrid search reads the chunks at boot, so a deployment without them raises
+<code>RetrievalError</code> and refuses every question. The calibration file
+carries the gate-2 threshold that was actually measured (5.5) rather than the
+provisional default in code (5.0). Together they are 4.6 MB. The 89 MB embed
+cache is <em>not</em> committed — it is ingest infrastructure and never touched
+on the query path.
+</p>
+
+<h2>4. Module reference</h2>
+
+<table>
+  <tr><th style="width:30%">Module</th><th style="width:9%">Lines</th><th>Responsibility</th></tr>
+  <tr><td class="k">config.py</td><td class="n">159</td><td>Single source of tunables. Also computes <code>pipeline_fingerprint</code>, which namespaces the response cache so a reindex or recalibration makes old entries unreachable rather than stale.</td></tr>
+  <tr><td class="k">models.py</td><td class="n">113</td><td>Contracts shared by every stage. <code>Claim.chunk_ids</code> has <code>min_length=1</code>, so the schema itself forbids an uncited claim.</td></tr>
+  <tr><td class="k">llm.py</td><td class="n">103</td><td>One place for model choice, retries, and failure policy. An LLM error raises; it never degrades into “answer anyway”. Also records <em>degradations</em> so a fail-closed refusal is distinguishable from a considered one.</td></tr>
+  <tr><td class="k">assistant.py</td><td class="n">187</td><td>The pipeline. <code>ask()</code> wraps caching around <code>_run()</code>, which walks the six stages and builds the trace.</td></tr>
+  <tr><td class="k">cache.py</td><td class="n">221</td><td>Bounded in-process LRU in front of Upstash, short timeouts, circuit breaker after 3 consecutive failures.</td></tr>
+  <tr><td class="k">security.py</td><td class="n">153</td><td>HMAC session cookies keyed off the password itself, plus per-IP rate limiting on separate counters for asking and logging in.</td></tr>
+  <tr><td class="k">api.py</td><td class="n">214</td><td>FastAPI app: serves the UI at <code>/</code>, the API under <code>/api/*</code>, login/logout, and an unauthenticated <code>/health</code>.</td></tr>
+  <tr><td class="k">ingest/parse.py</td><td class="n">316</td><td>Layout-aware PDF parsing — heading detection by font size with a rescue rule for headings typeset at body size, plus running-header removal.</td></tr>
+  <tr><td class="k">guardrails/output_gate.py</td><td class="n">329</td><td>The largest guardrail: citation validity, unsupported numbers, claim-level support judging, and framing checks, with partial repair.</td></tr>
+  <tr><td class="k">retrieval/rewrite.py</td><td class="n">94</td><td>Hand-curated abbreviation glossary. Expansions are additive and ambiguous abbreviations are deliberately left alone.</td></tr>
+</table>
+
+<h2>5. Request flow, end to end</h2>
+
+<h3>5.1 A refused question</h3>
+<pre>POST /api/ask   {"query": "Should I take rifampicin for my cough?"}
+
+  api.require_auth          session cookie valid (or no password configured)
+  api.enforce_rate_limit    INCR rl:ask:&lt;window&gt;:&lt;hash(ip)&gt;   → within quota
+  Assistant.ask             cache miss → _run()
+    input_gate.classify     regex "\bshould i\b" matches
+                            → Intent.PERSONALIZED_ADVICE
+    ✗ short-circuit         no retrieval, no embedding, no model call
+
+  Response(answered=False, refusal_reason="personalized_advice",
+           trace={"stages": ["intent"], "short_circuited": "no retrieval performed"})</pre>
+<p class="small muted">
+Rules run first and may only ever <em>escalate</em> to a refusal — they are never
+allowed to stamp a query in-scope. If they could, any phrasing the regexes failed
+to anticipate would bypass the model check entirely, which is how a blocklist
+quietly becomes an allowlist.
+</p>
+
+<h3>5.2 An answered question</h3>
+<pre>POST /api/ask   {"query": "What does the guideline say about TB treatment duration?"}
+
+  Assistant.ask             cache key = sha256(casefolded query, screen) under fingerprint
+    ├ HIT  → return stored Response, trace.cache = "hit"        ~107 ms
+    └ MISS → _run()                                             ~10 s
+
+    Gate 1  input_gate      no rule match → model classifies → IN_SCOPE
+    Retrieve  search.py     rewrite: "TB" → "TB tuberculosis"   (additive)
+                            dense:   embed query → LanceDB top-20
+                            lexical: BM25 over 3,414 local chunks → top-20
+                            fuse:    reciprocal rank fusion → 34 candidates
+    Rerank  rerank.py       one batched call scores each passage 0–10, absolutely
+    Gate 2  confidence      top score 9.0 ≥ threshold 5.5 → keep 6, label C1…C6
+    Generate  generate.py   structured GroundedAnswer: prose + claims + chunk_ids
+    Gate 3  output_gate     citations valid? numbers present in cited text?
+                            each claim supported? framing third-person?
+                            → strips 1 unsupported claim, passes the rest
+
+  Response(answered=True, citations=[C1…C6], trace={...})
+  → cached for 24 h, unless any stage was degraded</pre>
+
+<h3>5.3 What the browser does with it</h3>
+<p>
+The UI requests <code>trace: true</code> and renders a <strong>pipeline panel</strong>
+under every answer showing what each stage decided. That panel is the reason the
+UI exists: a chat box shows you an answer, but it cannot show you that a question
+was refused <em>before retrieval ran</em>, or that the reranker scored every
+passage zero. Hovering a <code>[C1]</code> marker highlights the source it refers to.
+</p>
+
+<h2>6. Offline flow — corpus to index</h2>
+<pre>rag corpus scan     inspect data/raw/, write candidate manifest entries
+                    (url, specialty and version left blank rather than guessed)
+rag ingest          verify sha256 against corpus_manifest.yaml, then
+                    parse.py → sections → chunk.py → data/chunks/*.jsonl
+rag index           embed.py (npz cache) → store.py → LanceDB table
+rag eval calibrate  measure the gate-2 threshold from labelled cases
+rag eval run        full pipeline metrics: safety compliance, false-refusal rate</pre>
+
+<div class="note">
+  <div class="t">Corpus governance</div>
+  A PDF sitting in <code>data/raw/</code> is not part of the corpus. A PDF
+  <strong>listed in the manifest with a matching sha256</strong> is. Dropping an
+  uncurated file into the directory halts ingestion with a named error rather than
+  quietly widening what the assistant will speak about.
+</div>
+
+<h3>Threshold calibration</h3>
+<p>
+Gate 2's threshold is measured, not chosen. <code>rag eval calibrate</code> stops
+after reranking — it only needs the top-1 score per question, so it skips
+generation and costs a fraction as much. It then sweeps candidate thresholds and
+takes the <em>midpoint of the widest maximum-accuracy band</em> rather than an
+edge, because rerank scores move slightly between runs and a threshold sitting
+exactly on an observed score flips that case on the next query. The measured
+value is 5.5, against answerable cases scoring 10.0 and unanswerable ones 0.0.
+</p>
+
+<h2>7. Caching</h2>
+
+<table>
+  <tr><th style="width:16%">Layer</th><th style="width:26%">Key</th><th style="width:10%">TTL</th><th>Purpose</th></tr>
+  <tr><td><strong>L0</strong></td><td class="k">emb:sha256(model,dim,text)</td><td>30 d</td>
+      <td>Query embeddings. Also removes an 89 MB npz rewrite from the hot path — the disk cache is now lazy and ingest-only.</td></tr>
+  <tr><td><strong>L1</strong></td><td class="k">resp:&lt;fingerprint&gt;:sha256(query)</td><td>24 h</td>
+      <td>Whole responses. A hit skips all five model calls: ~10 s → ~107 ms.</td></tr>
+  <tr><td><strong>rate</strong></td><td class="k">rl:&lt;scope&gt;:&lt;window&gt;:hash(ip)</td><td>1 h</td>
+      <td>Per-IP counters, one <code>INCR</code>+<code>EXPIRE</code> pipeline per check.</td></tr>
+</table>
+
+<h4>Two rules, inverted from the rest of the system</h4>
+<ul>
+  <li><strong>The cache never fails closed.</strong> Everything in <code>llm.py</code>
+      refuses on error because every caller there is a safety gate. Nothing in the
+      cache is. A miss, a timeout or an unreachable Upstash all degrade to
+      “compute it normally”.</li>
+  <li><strong>The cache never adds latency.</strong> Upstash is a remote TLS hop of
+      tens of milliseconds. Timeouts are short and retries are disabled — redis-py
+      retries three times with backoff by default, which silently turned a 0.4 s
+      budget into a measured 0.73 s.</li>
+</ul>
+
+<div class="note warn">
+  <div class="t">Outages are never cached</div>
+  When a stage falls back because a model was unreachable, it records itself via
+  <code>llm.note_degraded()</code>. <code>Assistant.ask</code> refuses to store any
+  response carrying a degradation — otherwise a minute of API trouble becomes a
+  full day of a good question being refused from cache.
+</div>
+
+<h2>8. Access control</h2>
+
+<table>
+  <tr><th style="width:22%">Control</th><th style="width:18%">Fails</th><th>Behaviour</th></tr>
+  <tr><td><strong>Password gate</strong><br><span class="small muted">APP_PASSWORD</span></td>
+      <td><span class="pill bad">closed</span></td>
+      <td>Unset by default, so local work and tests need nothing. When set, <code>/</code>
+          serves a login page and every <code>/api</code> route returns 401. Session is an
+          HMAC-signed cookie — <code>httponly</code>, <code>samesite=lax</code>, and
+          <code>secure</code> only over real HTTPS. The signing key derives from the
+          password, so rotating it logs everyone out.</td></tr>
+  <tr><td><strong>Rate limit</strong><br><span class="small muted">RATE_LIMIT_PER_WINDOW</span></td>
+      <td><span class="pill ok">open</span></td>
+      <td>Per-IP fixed window, default 30/hour, IP hashed not stored. Falls back to a
+          per-process counter when Redis is unreachable. Asking and logging in use
+          <em>separate</em> counters, so failed logins never consume the question quota.</td></tr>
+  <tr><td><strong>Health check</strong></td><td>—</td>
+      <td><code>/health</code> stays open: uptime monitoring must not need a password,
+          and it reveals nothing but liveness.</td></tr>
+</table>
+
+<p class="small muted">
+The API key itself is never exposed — it appears in no response model, trace field
+or log line, and all model calls are server-side. Neither control replaces a hard
+monthly spend limit on a project-scoped OpenAI key, which is the only backstop no
+application bug can undo.
+</p>
+
+<h2>9. Deployment</h2>
+<table>
+  <tr><th style="width:30%">Concern</th><th>Resolution</th></tr>
+  <tr><td>Runtime bundle</td><td>124 MB installed against Vercel's 250 MB limit. The PDF parser (64 MB) sits in the <code>ingest</code> extra and its import is lazy, so a deploy that only answers questions never loads it.</td></tr>
+  <tr><td>Vector store</td><td>Self-hosted LanceDB reached over plain <code>httpx</code>, so the heavy client and its Arrow dependency never enter the bundle.</td></tr>
+  <tr><td>Cold start</td><td>~2.2 s to import and build the BM25 index over 3,414 chunks; 204 MB peak RSS against 1024 MB requested.</td></tr>
+  <tr><td>Entrypoint</td><td>Top-level <code>app.py</code>, which Vercel auto-detects; <code>src/</code> is added to <code>sys.path</code> so the import works whether or not the package was installed.</td></tr>
+  <tr><td>Required config</td><td><code>OPENAI_API_KEY</code>, <code>LANCEDB_URI</code>, <code>LANCEDB_API_KEY</code>, <code>REDIS_URL</code>. Everything else matches a code default.</td></tr>
+</table>
+
+<h2>10. Testing</h2>
+<div class="grid2">
+<table>
+  <tr><th>Suite</th><th class="n">Tests</th></tr>
+  <tr><td class="k">test_security.py</td><td class="n">22</td></tr>
+  <tr><td class="k">test_cache.py</td><td class="n">19</td></tr>
+  <tr><td class="k">test_guardrails.py</td><td class="n">16</td></tr>
+  <tr><td class="k">test_ingest.py</td><td class="n">13</td></tr>
+  <tr><td class="k">test_api.py</td><td class="n">10</td></tr>
+  <tr><td class="k">test_web_ui.py</td><td class="n">9</td></tr>
+  <tr><td class="k">test_indexing.py</td><td class="n">5</td></tr>
+  <tr><td><strong>Total</strong></td><td class="n"><strong>100</strong></td></tr>
+</table>
+<div>
+<p class="small">
+Tests are isolated from live infrastructure: an autouse fixture clears
+<code>REDIS_URL</code>, because <code>.env</code> carries a real one and the suite
+was otherwise reading and writing production keys — rate-limit counters survived
+between runs, which made the limiter tests pass alone and fail together.
+</p>
+<p class="small">
+<code>test_web_ui.py</code> guards the Python/JavaScript seam. The pipeline panel
+is rendered in the browser now, so those tests compare the JS stage table against
+the keys <code>assistant.py</code> actually writes. Renaming a trace key would not
+raise — the panel would silently show “not reached”.
+</p>
+</div>
+</div>
+
+<h2>11. Decisions worth knowing</h2>
+<ul>
+  <li><strong>Rank fusion, not score fusion.</strong> Dense distances and BM25 scores
+      are not on a comparable scale, so hybrid retrieval fuses on rank.</li>
+  <li><strong>Absolute rerank scores.</strong> Gate 2 refuses on the top-1 value, so
+      the prompt asks how well a passage answers the question on a fixed scale —
+      never which passage is best.</li>
+  <li><strong>Additive query expansion.</strong> “TB” becomes “TB tuberculosis”, never
+      “tuberculosis”: replacing the token would destroy exactly what BM25 matches on.
+      Ambiguous abbreviations (<code>MI</code>, <code>DM</code>, <code>BP</code>) are
+      left alone, because guessing wrong in a medical corpus is not recoverable.</li>
+  <li><strong>Refusals are 200s.</strong> Encoding them as 4xx would push callers toward
+      treating a correct outcome as a fault to be retried around.</li>
+  <li><strong>The evaluation view has no “run” button.</strong> A run costs real API calls
+      and takes minutes — too easy to trigger by accident from a browser.</li>
+  <li><strong>Blank provenance over invented provenance.</strong> <code>corpus scan</code>
+      leaves url, specialty and version empty rather than guessing; those fields end up
+      in citations, and a blank is visible where a fabrication is not.</li>
+</ul>
+
+<p class="small muted" style="margin-top:2em; border-top:1px solid var(--line); padding-top:.6em;">
+Generated from the repository at commit time · 100 tests passing ·
+figures and measurements in this document were taken from the running system.
+</p>
+
+</body>
+</html>
