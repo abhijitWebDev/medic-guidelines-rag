@@ -13,16 +13,21 @@ dependencies = [
     "openai>=3.5.0",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.15.0",
-    "pymupdf>=1.28.2",
     "python-dotenv>=1.2.3",
     "redis>=5.0.0",
     "pyyaml>=6.0.3",
     "rank-bm25>=0.2.2",
     "rich>=15.0.0",
-    "streamlit>=1.62.0",
     "tiktoken>=0.14.0",
     "uvicorn[standard]>=0.52.4",
 ]
+
+[project.optional-dependencies]
+# Building the index from PDFs. Not needed to answer questions, and 64 MB.
+ingest = ["pymupdf>=1.28.2"]
+# The original Streamlit UI, superseded by the static page in web/static
+# but kept working. Pulls in pyarrow+pandas+altair, ~250 MB.
+ui = ["streamlit>=1.62.0"]
 
 [project.scripts]
 rag = "rag_project.cli:main"
@@ -39,4 +44,7 @@ testpaths = ["tests"]
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
+    "httpx>=0.28.1",      # fastapi TestClient
+    "pymupdf>=1.28.2",   # ingest tests
+    "streamlit>=1.62.0", # ui renderer tests
 ]

@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Medical Guideline Assistant</title>
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🩺</text></svg>">
+<style>
+/* ==========================================================================
+   Tokens. Light is the base; dark overrides only what changes, so a colour
+   can never be defined in one theme and missing from the other.
+   ========================================================================== */
+:root {
+  --bg:#f7f9fb; --surface:#fff; --surface-2:#f1f4f8; --surface-3:#e8edf3;
+  --ink:#0f151c; --ink-2:#3d4854; --dim:#697585;
+  --line:#e2e8f0; --line-2:#cfd8e3;
+  --accent:#0b63ce; --accent-ink:#0b63ce; --accent-soft:rgba(11,99,206,.10);
+  --accent-line:rgba(11,99,206,.28);
+  --ok:#137a3b; --ok-soft:rgba(19,122,59,.10);
+  --bad:#c22a30; --bad-soft:rgba(194,42,48,.09);
+  --warn:#9a6206; --warn-soft:rgba(196,138,20,.12); --warn-line:rgba(196,138,20,.4);
+  --idle:#9aa5b3;
+  --shadow:0 1px 2px rgba(15,21,28,.05), 0 4px 16px -6px rgba(15,21,28,.10);
+  --shadow-lg:0 2px 4px rgba(15,21,28,.06), 0 16px 40px -12px rgba(15,21,28,.18);
+  --radius:14px; --radius-sm:9px;
+}
+:root:not([data-theme="light"]) { color-scheme: light dark; }
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:#0a0e13; --surface:#121821; --surface-2:#171e29; --surface-3:#1e2735;
+    --ink:#e8eef6; --ink-2:#b9c6d6; --dim:#7d8b9d;
+    --line:#1e2733; --line-2:#2b3745;
+    --accent:#5aa2ff; --accent-ink:#8dbeff; --accent-soft:rgba(90,162,255,.14);
+    --accent-line:rgba(90,162,255,.32);
+    --ok:#48c26a; --ok-soft:rgba(72,194,106,.13);
+    --bad:#ff6b6b; --bad-soft:rgba(255,107,107,.12);
+    --warn:#e0a233; --warn-soft:rgba(224,162,51,.13); --warn-line:rgba(224,162,51,.36);
+    --idle:#5b6878;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 4px 16px -6px rgba(0,0,0,.5);
+    --shadow-lg:0 2px 4px rgba(0,0,0,.45), 0 16px 40px -12px rgba(0,0,0,.65);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size:15px; line-height:1.6;
+  -webkit-font-smoothing: antialiased;
+}
+:where(a) { color:var(--accent); text-decoration:none; }
+:where(a):hover { text-decoration:underline; }
+:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:4px; }
+code, .mono {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size:.86em;
+}
+
+.wrap { max-width:780px; margin:0 auto; padding:2.75rem 1.25rem 5rem; }
+
+/* --- header ------------------------------------------------------------ */
+header { margin-bottom:1.75rem; }
+.brand { display:flex; align-items:center; gap:.7rem; margin-bottom:.55rem; }
+.mark {
+  width:38px; height:38px; flex:none; border-radius:11px;
+  background:linear-gradient(145deg, var(--accent), color-mix(in srgb, var(--accent) 62%, #7b4dff));
+  display:grid; place-items:center; font-size:1.1rem;
+  box-shadow:0 3px 10px -2px var(--accent-line);
+}
+h1 { font-size:1.42rem; letter-spacing:-.02em; margin:0; font-weight:650; }
+.tagline { color:var(--dim); font-size:.92rem; margin:0; max-width:56ch; }
+
+/* --- corpus ------------------------------------------------------------ */
+details.corpus {
+  border:1px solid var(--line); border-radius:var(--radius);
+  background:var(--surface); margin-bottom:1.4rem; overflow:hidden;
+}
+details.corpus > summary {
+  cursor:pointer; padding:.72rem 1rem; font-weight:600; font-size:.86rem;
+  list-style:none; display:flex; align-items:center; gap:.5rem;
+  color:var(--ink-2); user-select:none;
+}
+details.corpus > summary::-webkit-details-marker { display:none; }
+.chev { transition:transform .18s ease; color:var(--dim); font-size:.7rem; }
+details.corpus[open] .chev { transform:rotate(90deg); }
+summary .spacer { margin-left:auto; font-weight:400; color:var(--dim); font-size:.82rem; }
+.corpus-body { padding:.25rem 1rem 1.1rem; font-size:.86rem; color:var(--ink-2); }
+.metrics { display:flex; gap:.6rem; margin:.3rem 0 1rem; }
+.metric {
+  flex:1; background:var(--surface-2); border:1px solid var(--line);
+  border-radius:var(--radius-sm); padding:.6rem .8rem;
+}
+.metric b { display:block; font-size:1.32rem; color:var(--ink); line-height:1.25;
+  font-variant-numeric:tabular-nums; letter-spacing:-.02em; }
+.metric span { font-size:.76rem; color:var(--dim); text-transform:uppercase; letter-spacing:.05em; }
+.kv { display:flex; flex-wrap:wrap; gap:.3rem .9rem; margin-bottom:.35rem; }
+.kv > span { white-space:nowrap; }
+.tag {
+  display:inline-block; background:var(--surface-3); border:1px solid var(--line);
+  border-radius:5px; padding:.05em .45em; font-size:.8em; color:var(--ink-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.corpus-body h4 {
+  font-size:.72rem; text-transform:uppercase; letter-spacing:.07em;
+  color:var(--dim); margin:1.15rem 0 .5rem; font-weight:600;
+}
+.doclist { margin:0; padding:0; list-style:none; columns:2; column-gap:1.4rem; }
+.doclist li { padding:.16rem 0; font-size:.82rem; break-inside:avoid; }
+.doclist li::before { content:"·"; color:var(--dim); margin-right:.45rem; }
+.doclist.skipped li { opacity:.65; }
+@media (max-width:640px) { .doclist { columns:1; } }
+
+/* --- ask --------------------------------------------------------------- */
+.ask-card {
+  background:var(--surface); border:1px solid var(--line);
+  border-radius:var(--radius); padding:.5rem; box-shadow:var(--shadow);
+  transition:border-color .16s ease, box-shadow .16s ease;
+}
+.ask-card:focus-within { border-color:var(--accent-line); box-shadow:var(--shadow-lg); }
+textarea {
+  width:100%; min-height:82px; padding:.65rem .7rem; resize:vertical; display:block;
+  border:0; background:transparent; color:var(--ink);
+  font:inherit; font-size:1rem; line-height:1.55;
+}
+textarea::placeholder { color:var(--dim); }
+textarea:focus { outline:none; }
+.ask-foot {
+  display:flex; align-items:center; gap:.75rem; padding:.15rem .35rem .2rem .7rem;
+}
+.kbd-hint { color:var(--dim); font-size:.78rem; margin-right:auto; }
+.kbd {
+  border:1px solid var(--line-2); border-bottom-width:2px; border-radius:5px;
+  padding:.05em .35em; font-size:.9em; color:var(--ink-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+button.primary {
+  padding:.5rem 1.15rem; border:0; border-radius:9px; background:var(--accent);
+  color:#fff; font:inherit; font-weight:600; font-size:.92rem; cursor:pointer;
+  display:inline-flex; align-items:center; gap:.5rem;
+  transition:filter .15s ease, transform .08s ease;
+}
+button.primary:hover:not(:disabled) { filter:brightness(1.08); }
+button.primary:active:not(:disabled) { transform:translateY(1px); }
+button.primary:disabled { opacity:.6; cursor:default; }
+.spinner {
+  width:13px; height:13px; border:2px solid rgba(255,255,255,.35);
+  border-top-color:#fff; border-radius:50%; display:none;
+}
+button.primary.busy .spinner { display:block; animation:spin .7s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+.examples { display:flex; flex-wrap:wrap; gap:.4rem; margin:.9rem 0 0; }
+.examples button {
+  padding:.34rem .75rem; border:1px solid var(--line); border-radius:999px;
+  background:var(--surface); color:var(--dim); font:inherit; font-size:.81rem;
+  cursor:pointer; transition:all .15s ease;
+}
+.examples button:hover:not(:disabled) {
+  border-color:var(--accent-line); color:var(--accent-ink);
+  background:var(--accent-soft);
+}
+.examples button:disabled { opacity:.45; cursor:default; }
+.eyebrow {
+  color:var(--dim); font-size:.72rem; text-transform:uppercase;
+  letter-spacing:.07em; font-weight:600; margin:1.4rem 0 .55rem;
+}
+
+/* --- result card ------------------------------------------------------- */
+.result {
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+  padding:1.35rem 1.4rem; margin-top:1.1rem; box-shadow:var(--shadow);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .result { animation:rise .3s cubic-bezier(.2,.7,.3,1); }
+  @keyframes rise { from { opacity:0; transform:translateY(7px); } }
+}
+.qtext {
+  font-size:1.02rem; font-weight:640; letter-spacing:-.01em; margin:0 0 1rem;
+  padding-bottom:.85rem; border-bottom:1px solid var(--line); color:var(--ink);
+}
+.answer { line-height:1.78; font-size:1.0rem; color:var(--ink); max-width:66ch; }
+.answer p { margin:0 0 .85rem; }
+.answer p:last-child { margin-bottom:0; }
+.cite {
+  display:inline-block; background:var(--accent-soft); color:var(--accent-ink);
+  border:1px solid var(--accent-line); border-radius:5px;
+  padding:0 .38em; margin:0 .06em; font-size:.76em; font-weight:650;
+  white-space:nowrap; cursor:pointer; vertical-align:.06em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  transition:background .14s ease;
+}
+.cite:hover { background:var(--accent-line); }
+
+.refusal {
+  display:flex; gap:.7rem; padding:.9rem 1rem; border-radius:var(--radius-sm);
+  border:1px solid; line-height:1.65;
+}
+.refusal .ricon { font-size:1.05rem; line-height:1.5; flex:none; }
+.refusal.warn { background:var(--warn-soft); border-color:var(--warn-line); color:var(--ink); }
+.refusal.err  { background:var(--bad-soft);  border-color:var(--bad); color:var(--ink); }
+.reason { color:var(--dim); font-size:.8rem; margin-top:.6rem; }
+
+/* --- sources ----------------------------------------------------------- */
+.sec-head {
+  font-size:.72rem; text-transform:uppercase; letter-spacing:.07em;
+  color:var(--dim); margin:1.5rem 0 .6rem; font-weight:600;
+}
+.source {
+  display:flex; gap:.7rem; padding:.6rem .75rem; border-radius:var(--radius-sm);
+  border:1px solid var(--line); background:var(--surface-2); margin-bottom:.4rem;
+  transition:border-color .2s ease, background .2s ease;
+}
+.source.lit { border-color:var(--accent-line); background:var(--accent-soft); }
+.badge {
+  flex:none; height:1.45rem; min-width:1.45rem; padding:0 .35rem; border-radius:6px;
+  background:var(--accent-soft); border:1px solid var(--accent-line);
+  color:var(--accent-ink); font-size:.72rem; font-weight:700;
+  display:grid; place-items:center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.source-body { min-width:0; }
+.source-title { font-weight:600; font-size:.9rem; line-height:1.35; }
+.source-meta { color:var(--dim); font-size:.79rem; margin-top:.12rem; }
+.dot { opacity:.5; margin:0 .3rem; }
+.score { color:var(--ink-2); font-variant-numeric:tabular-nums; }
+
+/* --- pipeline rail ----------------------------------------------------- */
+.pipeline { margin-top:1.5rem; }
+.rail { position:relative; padding-left:1.4rem; }
+.rail::before {
+  content:""; position:absolute; left:5px; top:.7rem; bottom:.7rem;
+  width:2px; background:var(--line-2); border-radius:1px;
+}
+.stage { position:relative; padding:.42rem 0; font-size:.85rem; }
+.stage::before {
+  content:""; position:absolute; left:-1.4rem; top:.78rem;
+  width:12px; height:12px; border-radius:50%;
+  background:var(--surface); border:2px solid var(--idle); box-sizing:border-box;
+}
+.stage.ok::before   { border-color:var(--ok);  background:var(--ok); box-shadow:0 0 0 3px var(--ok-soft); }
+.stage.fail::before { border-color:var(--bad); background:var(--bad); box-shadow:0 0 0 3px var(--bad-soft); }
+.stage.unreached { opacity:.5; }
+.stage-label { font-weight:600; color:var(--ink-2); }
+.stage-sum { color:var(--dim); font-size:.83rem; line-height:1.5; word-break:break-word; }
+.note { color:var(--dim); font-size:.8rem; margin-top:.6rem; padding-left:1.4rem; }
+.note.warnish { color:var(--warn); }
+
+.disclaimer {
+  color:var(--dim); font-size:.79rem; line-height:1.6; margin-top:1.3rem;
+  padding-top:.9rem; border-top:1px solid var(--line);
+}
+
+/* --- states ------------------------------------------------------------ */
+.empty {
+  background:var(--surface); border:1px dashed var(--line-2); border-radius:var(--radius);
+  padding:1.5rem 1.4rem; color:var(--dim); font-size:.9rem; line-height:1.65;
+  margin-top:1.1rem;
+}
+.empty strong { color:var(--ink-2); }
+.loading {
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+  padding:1.35rem 1.4rem; margin-top:1.1rem; box-shadow:var(--shadow);
+}
+.bar { height:9px; border-radius:5px; background:var(--surface-3); margin-bottom:.6rem; }
+.bar:nth-child(2) { width:88%; } .bar:nth-child(3) { width:64%; }
+@media (prefers-reduced-motion: no-preference) {
+  .bar { background:linear-gradient(90deg, var(--surface-3) 25%, var(--surface-2) 37%, var(--surface-3) 63%);
+         background-size:400% 100%; animation:shim 1.3s ease-in-out infinite; }
+  @keyframes shim { from { background-position:100% 0; } to { background-position:0 0; } }
+}
+.loading-label { color:var(--dim); font-size:.84rem; margin-bottom:.9rem; }
+.error {
+  background:var(--bad-soft); border:1px solid var(--bad); color:var(--ink);
+  padding:.9rem 1rem; border-radius:var(--radius-sm);
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="mark">🩺</div>
+      <h1>Medical Guideline Assistant</h1>
+    </div>
+    <p class="tagline">
+      Grounded answers from official MOHFW Standard Treatment Guidelines.
+      Every claim is cited; unsupported questions are refused.
+    </p>
+  </header>
+
+  <details class="corpus" id="corpus">
+    <summary>
+      <span class="chev">▶</span> Corpus
+      <span class="spacer" id="corpus-glance"></span>
+    </summary>
+    <div class="corpus-body" id="corpus-body">loading…</div>
+  </details>
+
+  <form id="ask-form">
+    <div class="ask-card">
+      <textarea id="q" rows="3" aria-label="Your question"
+        placeholder="What do the guidelines say about the diagnosis of tuberculosis?"></textarea>
+      <div class="ask-foot">
+        <span class="kbd-hint"><span class="kbd">Ctrl</span> + <span class="kbd">↵</span> to ask</span>
+        <button class="primary" id="submit" type="submit">
+          <span class="spinner" aria-hidden="true"></span><span id="submit-label">Ask</span>
+        </button>
+      </div>
+    </div>
+  </form>
+
+  <p class="eyebrow">Try one</p>
+  <div class="examples" id="examples"></div>
+
+  <div id="live" aria-live="polite"></div>
+  <div id="results"></div>
+
+  <div class="empty" id="empty">
+    Ask a question above. The <strong>Pipeline</strong> panel under each answer shows
+    which gate made the decision — including when a question is refused before any
+    retrieval happens.
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// Mirrors components.STAGES: key in Response.trace -> label, in pipeline order.
+const STAGES = [
+  ["intent",      "Gate 1 · intent"],
+  ["retrieve",    "Retrieve"],
+  ["rerank",      "Rerank"],
+  ["confidence",  "Gate 2 · confidence"],
+  ["generate",    "Generate"],
+  ["output_gate", "Gate 3 · output"],
+];
+
+const EXAMPLES = [
+  "How is tuberculosis diagnosed?",
+  "What are the referral criteria for severe acute malnutrition?",
+  "What does the guideline say about management of snake bite?",
+  "Should I take rifampicin for my cough?",
+  "What is the treatment for bipolar disorder?",
+];
+
+const $ = (id) => document.getElementById(id);
+
+/* Everything below renders model-authored text. It is escaped first, without
+   exception, and only then are our own spans introduced -- an answer is
+   untrusted input, and the citation highlighter is the one place tempted to
+   treat it as markup. */
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+}
+
+// Citation pills carry the markers they name, so hovering one can light up the
+// matching source card below. `rid` scopes that to a single result.
+function highlightCitations(text, rid) {
+  return esc(text).replace(/\[(C\d+(?:\s*,\s*C\d+)*)\]/g, (_, m) => {
+    const markers = m.split(",").map((s) => s.trim()).join(" ");
+    return `<span class="cite" data-rid="${rid}" data-markers="${esc(markers)}"`
+      + ` tabindex="0" role="button" title="Show source">${esc(m)}</span>`;
+  });
+}
+
+function paragraphs(text, rid) {
+  return String(text ?? "")
+    .split(/\n{2,}/)
+    .filter((p) => p.trim())
+    .map((p) => `<p>${highlightCitations(p, rid).replace(/\n/g, "<br>")}</p>`)
+    .join("");
+}
+
+const num = (v, d) => (typeof v === "number" && isFinite(v) ? v.toFixed(d) : "—");
+
+// --- pipeline ------------------------------------------------------------
+// Ported from components._stage_state; kept deliberately close to it so the
+// two stay comparable when a stage's trace shape changes.
+function stageState(key, trace) {
+  if (!(trace.stages || []).includes(key)) return ["idle", "not reached"];
+
+  if (key === "intent") {
+    const it = trace.intent || {};
+    const label = it.label || "?";
+    return [label === "in_scope" ? "ok" : "fail",
+      `${label}${it.rule ? " · rule match" : " · model"} — ${it.reason || ""}`];
+  }
+  if (key === "retrieve") {
+    const r = trace.retrieval || {};
+    const exp = (r.expansions || []).length ? ` · expanded ${r.expansions.join(", ")}` : "";
+    return ["ok", `${r.dense_hits || 0} dense · ${r.lexical_hits || 0} lexical `
+                + `→ ${r.fused_pool || 0} fused${exp}`];
+  }
+  if (key === "rerank") {
+    const rr = trace.rerank || {};
+    const s = (rr.top_scores || []).filter((x) => x !== null && x !== undefined);
+    return ["ok", `${rr.scored || 0} scored · top: `
+                + (s.length ? s.map((x) => num(x, 0)).join(", ") : "no scores")];
+  }
+  if (key === "confidence") {
+    const c = trace.confidence || {};
+    return [c.passed ? "ok" : "fail",
+      `top ${num(c.top_score, 1)} vs threshold ${c.threshold} · kept ${c.kept || 0}`
+      + ` — ${c.reason || ""}`];
+  }
+  if (key === "generate") {
+    const g = trace.generation || {};
+    return g.insufficient_context
+      ? ["fail", "model reported insufficient context"]
+      : ["ok", `${g.claims || 0} claims drafted`];
+  }
+  if (key === "output_gate") {
+    const o = trace.output_gate || {};
+    return [o.passed ? "ok" : "fail", o.detail || ""];
+  }
+  return ["ok", ""];
+}
+
+function renderPipeline(trace, elapsed) {
+  if (!(trace.stages || []).length) return "";
+  const rows = STAGES.map(([key, label]) => {
+    const [state, summary] = stageState(key, trace);
+    const cls = state === "idle" ? "stage unreached" : `stage ${state}`;
+    return `<div class="${cls}"><div class="stage-label">${esc(label)}</div>`
+      + `<div class="stage-sum">${esc(summary)}</div></div>`;
+  }).join("");
+
+  const notes = [];
+  if (trace.short_circuited) notes.push(`<div class="note">↳ ${esc(trace.short_circuited)}</div>`);
+  // Present when a stage fell back because a model was unreachable, rather than
+  // because it judged the query. Worth showing: the two are indistinguishable
+  // from the outside, and only one of them is about your question.
+  if ((trace.degraded || []).length) {
+    notes.push(`<div class="note warnish">⚠ degraded — `
+      + `${esc(trace.degraded.join(", "))} unavailable, so this refusal is about `
+      + `the service, not your question</div>`);
+  }
+  if (trace.cache === "hit") notes.push(`<div class="note">⚡ served from cache</div>`);
+
+  const t = elapsed != null ? ` · ${elapsed.toFixed(1)}s` : "";
+  return `<div class="pipeline"><div class="sec-head">Pipeline${esc(t)}</div>`
+    + `<div class="rail">${rows}</div>${notes.join("")}</div>`;
+}
+
+function renderSources(citations, rid) {
+  if (!citations || !citations.length) return "";
+  const rows = citations.map((c) => {
+    const link = c.source_url
+      ? `<span class="dot">·</span><a href="${esc(c.source_url)}" target="_blank"
+           rel="noopener noreferrer">source</a>` : "";
+    return `<div class="source" data-rid="${rid}" data-marker="${esc(c.marker)}">`
+      + `<span class="badge">${esc(c.marker)}</span><div class="source-body">`
+      + `<div class="source-title">${esc(c.title || c.doc_id)}</div>`
+      + `<div class="source-meta">§ ${esc(c.section)}<span class="dot">·</span>`
+      + `p.${esc(c.pages)}<span class="dot">·</span>`
+      + `<span class="score">relevance ${num(c.rerank_score, 0)}/10</span>${link}</div>`
+      + `</div></div>`;
+  }).join("");
+  return `<div class="sec-head">Sources</div>${rows}`;
+}
+
+function renderAnswer(r, rid) {
+  if (r.answered) return `<div class="answer">${paragraphs(r.answer, rid)}</div>`;
+  const reason = r.refusal_reason || "refused";
+  // Emergency gets the loudest treatment; the rest are informational rather
+  // than errors, because refusing is a correct outcome of this system.
+  const emergency = reason === "emergency";
+  return `<div class="refusal ${emergency ? "err" : "warn"}">`
+    + `<span class="ricon">${emergency ? "🚨" : "⛔"}</span><div>${esc(r.answer)}</div></div>`
+    + `<div class="reason">refusal reason: <span class="tag">${esc(reason)}</span></div>`;
+}
+
+let seq = 0;
+
+function renderResult(r, elapsed, disclaimer) {
+  const rid = `r${++seq}`;
+  return `<div class="result" id="${rid}"><div class="qtext">${esc(r.query)}</div>`
+    + renderAnswer(r, rid) + renderSources(r.citations, rid)
+    + renderPipeline(r.trace || {}, elapsed)
+    + (disclaimer ? `<div class="disclaimer">⚠️ ${esc(disclaimer)}</div>` : "")
+    + `</div>`;
+}
+
+// --- corpus panel --------------------------------------------------------
+function renderCorpus(info) {
+  const c = info.counts || {};
+  const docs = info.documents || [];
+  const skipped = info.skipped_documents || [];
+
+  $("corpus-glance").textContent =
+    c.documents != null ? `${c.documents} docs · ${c.chunks} chunks` : "";
+
+  let h = `<div class="metrics">`
+    + `<div class="metric"><b>${c.documents ?? "—"}</b><span>documents</span></div>`
+    + `<div class="metric"><b>${c.chunks ?? "—"}</b><span>chunks</span></div></div>`;
+  h += `<div class="kv"><span>table <span class="tag">${esc(info.table)}</span></span>`
+    + `<span>threshold <span class="tag">${esc(info.confidence_threshold)}</span></span></div>`
+    + `<div class="kv"><span>answers <span class="tag">${esc(info.generation_model)}</span></span>`
+    + `<span>guards <span class="tag">${esc(info.guard_model)}</span></span></div>`
+    + `<div class="kv"><span>embeddings <span class="tag">${esc(info.embedding_model)}</span></span></div>`;
+  if (info.built_at) h += `<div class="kv"><span>indexed ${esc(info.built_at)}</span></div>`;
+
+  if (docs.length) {
+    h += `<h4>Documents (${docs.length})</h4><ul class="doclist">`
+      + docs.map((d) => `<li>${esc(d.title || d.doc_id)}</li>`).join("") + `</ul>`;
+  }
+  if (skipped.length) {
+    h += `<h4>Not indexed (${skipped.length})</h4>`
+      + `<div style="margin-bottom:.4rem;">In the corpus but contributing no chunks — `
+      + `questions relying solely on these will be refused for low confidence.</div>`
+      + `<ul class="doclist skipped">`
+      + skipped.map((d) => `<li>${esc(d.title || d.doc_id)}</li>`).join("") + `</ul>`;
+  }
+  h += `<h4>Scope</h4><div>Answers come <strong>only</strong> from the indexed `
+    + `government guidelines, with citations. Refused: personalized advice, `
+    + `diagnosis, dosing for a person, emergencies, and anything the corpus `
+    + `does not cover.</div>`;
+  return h;
+}
+
+// --- wiring --------------------------------------------------------------
+let disclaimer = "";
+let busy = false;
+
+function setBusy(state) {
+  busy = state;
+  const btn = $("submit");
+  btn.disabled = state;
+  btn.classList.toggle("busy", state);
+  $("submit-label").textContent = state ? "Running…" : "Ask";
+  document.querySelectorAll(".examples button").forEach((b) => (b.disabled = state));
+  $("live").innerHTML = state
+    ? `<div class="loading"><div class="loading-label">Running the pipeline…</div>`
+      + `<div class="bar"></div><div class="bar"></div><div class="bar"></div></div>`
+    : "";
+}
+
+async function ask(query) {
+  if (busy || !query.trim()) return;
+  setBusy(true);
+  $("empty").hidden = true;
+  const started = performance.now();
+  try {
+    const res = await fetch("api/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: query.trim(), trace: true }),
+    });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    const data = await res.json();
+    disclaimer = data.disclaimer || disclaimer;
+    // Only the newest result carries the disclaimer, as in the Streamlit UI.
+    $("results").querySelectorAll(".disclaimer").forEach((el) => el.remove());
+    $("results").insertAdjacentHTML("afterbegin",
+      renderResult(data, (performance.now() - started) / 1000, disclaimer));
+  } catch (err) {
+    $("results").insertAdjacentHTML("afterbegin",
+      `<div class="result"><div class="error">Request failed: ${esc(err.message)}</div></div>`);
+  } finally {
+    setBusy(false);
+  }
+}
+
+// Hovering or focusing a [C1] pill lights the source card it refers to.
+function litSources(el, on) {
+  const rid = el.dataset.rid;
+  el.dataset.markers.split(" ").forEach((m) => {
+    const card = document.querySelector(
+      `.source[data-rid="${rid}"][data-marker="${CSS.escape(m)}"]`);
+    if (card) card.classList.toggle("lit", on);
+  });
+}
+
+$("results").addEventListener("mouseover", (e) => {
+  const c = e.target.closest(".cite"); if (c) litSources(c, true);
+});
+$("results").addEventListener("mouseout", (e) => {
+  const c = e.target.closest(".cite"); if (c) litSources(c, false);
+});
+$("results").addEventListener("click", (e) => {
+  const c = e.target.closest(".cite"); if (!c) return;
+  const first = c.dataset.markers.split(" ")[0];
+  document.querySelector(`.source[data-rid="${c.dataset.rid}"][data-marker="${CSS.escape(first)}"]`)
+    ?.scrollIntoView({ behavior: "smooth", block: "center" });
+});
+
+$("ask-form").addEventListener("submit", (e) => { e.preventDefault(); ask($("q").value); });
+$("q").addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); ask($("q").value); }
+});
+
+$("examples").innerHTML = EXAMPLES.map((ex) =>
+  `<button type="button" title="${esc(ex)}">${esc(
+    ex.length < 30 ? ex : ex.slice(0, 27) + "…")}</button>`).join("");
+document.querySelectorAll(".examples button").forEach((b, i) => {
+  b.addEventListener("click", () => { $("q").value = EXAMPLES[i]; ask(EXAMPLES[i]); });
+});
+
+fetch("api/info")
+  .then((r) => r.json())
+  .then((info) => { $("corpus-body").innerHTML = renderCorpus(info); })
+  .catch(() => { $("corpus-body").textContent = "index information unavailable"; });
+</script>
+</body>
+</html>

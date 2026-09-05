@@ -17,8 +17,6 @@ from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import pymupdf
-
 # Section names that recur across MOHFW Standard Treatment Guidelines. Used to
 # rescue headings that are typeset at body size (which happens in these PDFs).
 STG_SECTION_RE = re.compile(
@@ -112,6 +110,12 @@ class ParsedDoc:
 
 
 def _extract_lines(path: Path) -> tuple[list[Line], int]:
+    # Imported here, not at module scope. `load_chunks` lives in this
+    # package and is on the *query* path, so a module-level import would
+    # make every deployment that only answers questions carry a 64 MB PDF
+    # library it never calls -- and fail at import if it were omitted.
+    import pymupdf
+
     lines: list[Line] = []
     with pymupdf.open(path) as doc:
         n_pages = doc.page_count

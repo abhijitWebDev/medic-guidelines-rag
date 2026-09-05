@@ -10,13 +10,15 @@ wheels/
 .venv
 data/raw/*
 !data/raw/.gitkeep
-data/chunks/*
-!data/chunks/.gitkeep
+# data/chunks IS committed: HybridRetriever reads it at boot for the BM25
+# half of hybrid search, so a deploy without it cannot answer anything.
 data/lancedb/
 .env
 data/embed_cache/
-data/index_manifest.json
-data/calibration.json
 
 # Source PDFs (168MB) - kept out of git; data/raw/ symlinks point here
 pdf-data/
+
+# Deployed builds need the measured gate-2 threshold and the index
+# manifest, so those two are committed; only the 89 MB embed cache and
+# the local LanceDB dir stay out.
