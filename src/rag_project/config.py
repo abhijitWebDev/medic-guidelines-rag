@@ -89,6 +89,24 @@ class Settings(BaseSettings):
     # eval harness has actually measured it. Never trust this default.
     confidence_threshold: float = 5.0
 
+    # --- Corrective retrieval (gate 2 middle band) -----------------------
+    # Below confidence_threshold but at or above this floor, gate 2 returns
+    # CORRECT instead of refusing: retrieval is retried once, wider and with a
+    # different query representation, and then judged again against the SAME
+    # confidence_threshold. See retrieval/corrective.py.
+    corrective_enabled: bool = True
+    # Floor of the band. Provisional, like confidence_threshold -- on the
+    # reranker's scale 4-6 is "related topic, contains part of the answer",
+    # which is the range worth a second attempt. Below it, retrieval is not in
+    # the right neighbourhood and a retry only spends money to refuse later.
+    corrective_threshold: float = 3.0
+    # The retry goes deeper: chunks fused into ranks 21-40 were never scored by
+    # the reranker at all, so this is recall the first pass could not have had.
+    corrective_k: int = 40
+    # ...and leans on the hypothetical, since the literal query is what already
+    # failed. Ignored when hyde_enabled is false; the retry is then depth only.
+    corrective_hyde_query_weight: float = 0.2
+
     # --- HyDE ------------------------------------------------------------
     # Search the dense half with a generated hypothetical answer blended into
     # the query vector. See retrieval/hyde.py for why it is blended rather
@@ -114,7 +132,7 @@ class Settings(BaseSettings):
     # code itself, so without this a guardrail fix stays invisible to every
     # user holding a cached refusal until the TTL expires -- which is exactly
     # the case a fix is urgent for.
-    guardrails_version: str = "v2"
+    guardrails_version: str = "v3"
 
     @property
     def table(self) -> str:
@@ -153,6 +171,10 @@ class Settings(BaseSettings):
                 self.hyde_query_weight,
                 self.hyde_model,
                 self.hyde_version,
+                self.corrective_enabled,
+                self.corrective_threshold,
+                self.corrective_k,
+                self.corrective_hyde_query_weight,
             )
         )
         return hashlib.sha256(material.encode()).hexdigest()[:16]
@@ -188,6 +210,8 @@ class Settings(BaseSettings):
         data = json.loads(self.calibration_path.read_text())
         if "confidence_threshold" in data:
             self.confidence_threshold = float(data["confidence_threshold"])
+        if "corrective_threshold" in data:
+            self.corrective_threshold = float(data["corrective_threshold"])
 
 
 @lru_cache

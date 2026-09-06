@@ -44,13 +44,15 @@ class HybridRetriever:
         self.store = store if store is not None else get_store()
         self.embedder = embedder if embedder is not None else Embedder()
 
-    def retrieve(self, query: str, k: int = 20) -> tuple[list[Retrieved], dict]:
+    def retrieve(
+        self, query: str, k: int = 20, hyde_query_weight: float | None = None
+    ) -> tuple[list[Retrieved], dict]:
         rewritten, applied = rewrite(query)
 
         # Dense half (remote). HyDE blends a generated hypothetical passage
         # into the query vector; it degrades to the plain query vector when
         # the model is unavailable, and never touches the lexical half below.
-        qv, hyde_trace = hyde.query_vector(rewritten, self.embedder)
+        qv, hyde_trace = hyde.query_vector(rewritten, self.embedder, hyde_query_weight)
         raw_hits = self.store.search(qv, limit=k)
         dense: list[tuple[Chunk, float]] = []
         orphans: list[str] = []

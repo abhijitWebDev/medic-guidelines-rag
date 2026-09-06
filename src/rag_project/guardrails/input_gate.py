@@ -76,6 +76,12 @@ def rule_screen(query: str) -> IntentVerdict | None:
 
 
 # --- Model pass ----------------------------------------------------------
+# The rules above have already run and may only escalate, so nothing here can
+# open a first-person hole: "should i", "can i take", "my test results" are
+# refused by regex before this prompt is ever consulted. That is what makes it
+# safe to teach this pass that an *indefinite* person ("a child", "a tourist")
+# is a clinical category rather than a patient -- the loosening applies only to
+# queries the rules already declined to catch.
 
 
 class _IntentOut(BaseModel):
@@ -94,14 +100,27 @@ framing. The user does not have to mention the guidelines: a bare "what is X" \
 or "what are the side effects of X" is a request for what the guidelines say \
 about X.
 - "personalized_advice": asks you to advise, diagnose, dose, or interpret \
-findings for a specific person (usually the user or a named relative).
+findings for a specific, identified person -- the user ("should I", "my dose"), \
+someone they identify as theirs ("my father", "my daughter's rash"), or a \
+person whose particulars they supply ("a 68-year-old on metformin whose ankles \
+are now swollen, what next"). The test is whether answering means reasoning \
+about one real individual's situation.
 - "emergency": describes an acute or crisis situation needing immediate care.
 - "out_of_domain": not about health or medicine at all (sport, code, travel, \
 politics), or a question about you rather than about a health topic.
 
 Asking about a drug, a dose, or a treatment is IN SCOPE when the question is \
 about what the guideline states. It is PERSONALIZED_ADVICE only when it asks \
-what a particular person should do.
+what a specific, identified person should do.
+
+An INDEFINITE person is not a specific person. "a child", "a tourist", "a \
+55-year-old", "adults", "pregnant women" are clinical categories -- the \
+vocabulary the guidelines are themselves written in -- so a question framed \
+around one is in_scope. Compare: "how many days of IV antibiotics for empyema \
+in a child" asks what the guideline states for a category; "how long should my \
+child stay on antibiotics" asks about one individual. Plain, non-clinical \
+wording ("dripped in", "pus around the lung") is how ordinary people say \
+clinical things -- it is not evidence that the question is personal.
 
 Whether the corpus actually covers the topic is NOT yours to decide -- a later \
 retrieval stage refuses when it finds nothing. "out_of_domain" means the wrong \
@@ -112,7 +131,11 @@ Examples:
 "what is diabetes" -> in_scope
 "what are the side effects of metformin" -> in_scope
 "how is drug-resistant tuberculosis treated" -> in_scope
+"how fast can quinine be infused" -> in_scope
+"what should a traveller take before visiting a malarious area" -> in_scope
+"how many days of iv antibiotics for empyema in a child" -> in_scope
 "should i stop taking my metformin" -> personalized_advice
+"how long should my child stay on antibiotics" -> personalized_advice
 "my father is unconscious, what do i do" -> emergency
 "who won the match last night" -> out_of_domain"""
 

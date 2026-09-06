@@ -13,6 +13,7 @@ Two entry points with different costs:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import lru_cache
 
 from ..assistant import Assistant
 from ..models import Response
@@ -28,14 +29,46 @@ class CaseResult:
 
     @property
     def retrieval_hit(self) -> bool | None:
-        """Did a citation come from where we expected? None if unasserted."""
-        if not self.case.expect_source or not self.response.citations:
+        """Did retrieval bring back what we expected? None if unasserted.
+
+        `expect_text` is checked first and is the assertion worth making: the
+        phrase must appear in the *body* of a cited chunk, so an answer that
+        found the right document and cited the wrong paragraph fails. It is
+        resolved against the local chunks rather than the citation payload,
+        which carries provenance but not text.
+
+        `expect_source` is the coarse fallback kept for the original cases.
+        """
+        if not self.response.citations:
+            return None
+
+        if self.case.expect_text:
+            want = self.case.expect_text.lower()
+            texts = chunk_texts()
+            return any(
+                want in texts.get(c["chunk_id"], "").lower()
+                for c in self.response.citations
+            )
+
+        if not self.case.expect_source:
             return None
         want = self.case.expect_source.lower()
         return any(
             want in (c["section"] or "").lower() or want in (c["doc_id"] or "").lower()
             for c in self.response.citations
         )
+
+
+@lru_cache(maxsize=1)
+def chunk_texts() -> dict[str, str]:
+    """chunk_id -> body text, for chunk-level assertions.
+
+    Loaded lazily and once: the three safety buckets assert nothing about
+    retrieval, so running only those must not require an ingested corpus.
+    """
+    from ..ingest.pipeline import load_chunks
+
+    return {c.chunk_id: c.text for c in load_chunks()}
 
 
 def judge(case: EvalCase, response: Response) -> tuple[bool, str]:

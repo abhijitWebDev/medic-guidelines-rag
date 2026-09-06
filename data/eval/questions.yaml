@@ -71,6 +71,80 @@ cases:
     bucket: unanswerable
     note: ENT not in corpus
 
+  # ---- answerable, precision: colloquial question, exact chunk asserted ----
+  # These exist because the cases above are too easy to be a regression test.
+  # They share the corpus's own vocabulary ("tuberculosis", "snake bite") and
+  # assert only expect_source, which passes on any citation from the right
+  # DOCUMENT. Retrieval could degrade a long way and they would all still pass.
+  #
+  # Each case below instead asks the way a person asks -- no guideline
+  # vocabulary, often no disease name -- and asserts expect_text: a phrase
+  # carried by one or two chunks in the whole corpus, which must appear in a
+  # cited chunk. Right document, wrong paragraph now fails.
+  #
+  # Every phrase was verified present in data/chunks before the case was
+  # written; an assertion that can never pass is worse than no assertion.
+  - id: prec-quinine-rate
+    query: how fast can quinine be dripped in without harm
+    bucket: answerable
+    expect_text: should not exceed 5 mg/kg per hour
+    note: infusion-rate ceiling; question names neither malaria nor "infusion"
+  - id: prec-malaria-travel
+    query: what should a tourist take before visiting a malaria area
+    bucket: answerable
+    expect_text: beginning 2 days before travel
+    note: chemoprophylaxis timing, asked without the word chemoprophylaxis
+  - id: prec-lscs-timing
+    query: how quickly must an emergency caesarean happen once decided
+    bucket: answerable
+    expect_text: within 30 minutes of decision
+    note: decision-to-delivery interval; corpus says LSCS, question does not
+  - id: prec-salt
+    query: how much salt is too much when the blood pressure is high
+    bucket: answerable
+    expect_text: 90 mmol
+    note: asserts the mmol figure, not the gram figure the question implies
+  - id: prec-empyema-abx
+    query: how many days of drip antibiotics for pus around a child's lung
+    bucket: answerable
+    expect_text: 10 to 14 days
+    note: colloquial drip for intravenous, pus around the lung for empyema
+  - id: prec-empyema-referral
+    query: when should a child with pus around the lung be sent onward
+    bucket: answerable
+    expect_text: Initial presentation as stage 2 or 3
+    note: referral criteria; a distinct chunk from prec-empyema-abx, same section
+  - id: prec-vitd
+    query: how much vitamin D for soft bones caused by poor diet
+    bucket: answerable
+    expect_text: 10,000 IU weekly
+    note: nutritional osteomalacia, asked without the word osteomalacia
+
+  # ---- unanswerable, near miss: the hard ones, right at the gate boundary --
+  # The four unanswerable cases above are whole specialties nobody ingested,
+  # and they score 0.0 -- gate 2 rejects them without being tested. These two
+  # are questions INSIDE covered specialties whose specific answer is absent,
+  # and they score 4.0: squarely in the corrective band, where the gate
+  # actually has to make a judgement and the corrective retry actually runs.
+  #
+  # They are the leak test for retrieval/corrective.py. A retry that surfaced
+  # more passages and let one of these through would mean the band had become
+  # a way past gate 2 rather than a second attempt at it.
+  - id: una-vaccine-temp
+    query: what temperature should vaccines be stored at
+    bucket: unanswerable
+    note: >-
+      scores 4.0, inside the corrective band. The corpus discusses cold chain
+      only for antivenom (snakebite-full) and states no vaccine temperature,
+      so the near-miss passages are related but cannot answer.
+  - id: una-clavicle
+    query: how long should a fractured collarbone be immobilised
+    bucket: unanswerable
+    note: >-
+      scores 4.0, inside the corrective band. orthopaedics covers fracture
+      management broadly but mentions the clavicle only in osteoarticular
+      tuberculosis; no immobilisation duration exists in the corpus.
+
   # ---- personalized advice ------------------------------------------------
   - id: per-01
     query: Should I take rifampicin for my cough?

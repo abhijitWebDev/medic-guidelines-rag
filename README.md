@@ -19,7 +19,10 @@ query
  │                          (dense half only; falls back to the query alone)
  ├─ retrieve                dense (remote) + BM25 (local), fused with RRF
  ├─ rerank                  absolute 0–10 relevance score per passage
- ├─ GATE 2  confidence      top-1 score < threshold → "not enough information"
+ ├─ GATE 2  confidence      top-1 ≥ threshold        → proceed
+ │                          top-1 in corrective band → retry retrieval once,
+ │                            wider + HyDE-weighted, re-judge at the SAME bar
+ │                          top-1 < band floor       → "not enough information"
  ├─ generate                structured JSON: answer + claims[] with chunk_ids
  ├─ GATE 3  output          citations exist → numbers traceable →
  │                          claims supported → framing safe
@@ -56,6 +59,20 @@ attribution and addressee:
 
 Same drug, same number. One reports; the other instructs.
 
+The same boundary decides *who* a question is about, and an indefinite person is
+not a person: "a child", "a tourist", "a 55-year-old" are clinical categories —
+the vocabulary the guidelines are themselves written in — so a question framed
+around one is in scope. "How many days of IV antibiotics for empyema in a child"
+asks what the guideline states for a category; "how long should my child stay on
+antibiotics" asks about one individual. Plain wording ("dripped in", "pus around
+the lung") is how ordinary people say clinical things, not evidence that a
+question is personal. Gate 1 got this wrong until the eval set caught it.
+
+Loosening that classifier is safe only because of the ordering above: the regex
+rules run first and may only escalate, so `should i`, `can i take` and `my test
+results` never reach the prompt at all. The judgement it was taught applies only
+to queries the rules already declined to catch.
+
 **Everything fails closed.** An unavailable classifier, reranker, or judge
 produces a refusal, never a pass.
 
@@ -91,6 +108,43 @@ not refusing, because HyDE is a retrieval improvement and not a gate. The
 fallback is recorded as a degradation so a weaker retrieval path is never cached.
 
     uv run rag ask "..." --no-hyde --trace     # or HYDE_ENABLED=false
+
+**Gate 2 is three-way, and the middle band is corrective.** This is CRAG (Yan
+et al., 2024) with its defining action removed. CRAG scores retrieval and, on a
+poor score, discards what it found and falls back to **web search**. That
+fallback cannot exist here: every claim must trace to one of the sha256-pinned
+MOHFW documents, which is what makes the citations, the index manifest, and
+gate 3's numeric-provenance check mean anything.
+
+So the corrective action is aimed at the *same corpus*, on the premise that a
+middling score usually means the passage exists and the first query missed it.
+The retry goes deeper (`corrective_k`, so chunks fused into ranks 21–40 that
+the reranker never scored) and leans onto the HyDE hypothetical, since the
+literal query is what already failed. This is where HyDE's latency is earned —
+paid on the queries that need it, not charged to every query that was fine.
+
+Three properties keep it safe inside a refusal gate:
+
+- **The bar does not move.** The merged pool is re-judged against the same
+  `confidence_threshold`. A correction buys a second attempt at the bar, never
+  a lower bar. Everything else is an optimisation; this is the invariant.
+- **Exactly one retry.** The second evaluation passes `allow_correction=False`,
+  so no path loops.
+- **Nothing is discarded.** The pool is the union of both passes, so a passage
+  the first pass scored well cannot be lost to a retry that fused differently.
+
+Already-scored passages are not re-sent to the reranker — sound precisely
+because that scale is absolute rather than relative.
+
+**How often does it fire, and does it help?** Rarely, and unproven. It never
+fires on the eval set (answerable cases score 10.0, unanswerable 0.0 — the band
+is empty). Across 16 ad-hoc probes it fired twice: once the retry found nothing
+better and refused (bar held); once it recovered top-1 from 4.0 to 7.0 and
+cleared gate 2, after which the *generator* declined the passages anyway. Zero
+observed cases so far where it flipped a refusal into an answer. Both band hits
+looked like genuine corpus gaps rather than retrieval failures — which is
+exactly the case a corrective retry cannot fix. Set `CORRECTIVE_ENABLED=false`
+to switch it off.
 
 ## Current corpus
 
@@ -134,25 +188,46 @@ lower rows. Treat dengue citations as slightly noisier than the other twenty.
 
 ### Measured results
 
-Against `data/eval/questions.yaml` (25 cases, `gpt-4o-mini` throughout):
+Against `data/eval/questions.yaml` (34 cases, `gpt-4o-mini` throughout):
 
 | metric | value |
 |---|---|
-| overall accuracy | 96% (24/25) |
+| overall accuracy | 100% (34/34) |
 | safety compliance | 100% (must be 100%) |
-| false refusal rate | 11% |
+| false refusal rate | 0% |
 | retrieval hit rate | 100% |
-| gate-2 threshold | 5.0 (calibrated) |
+| gate-2 threshold | 5.5 (calibrated) |
 
-Answerable queries score 9–10 on the reranker; unanswerable ones score 0.0.
-That separation is what the threshold sits in the middle of.
+**These numbers are one run, and the run is not deterministic.** Gate 3 is an
+LLM judge and has historically flipped `ans-ari-children` between runs; a clean
+sweep is evidence, not a guarantee. Treat a single 100% with suspicion — an
+earlier one recorded here turned out to be a lucky run.
 
-**These numbers are one run, and the run is not deterministic.** The single
-failure is `ans-ari-children`, refused by gate 3 as `unsafe_output`; the same
-query answered on one attempt and refused on the next two. Gate 3 is an LLM
-judge, and it leans toward refusing any answer that reads as dosing guidance —
-reproducible against `tb-standards` too, so it is a property of the gate rather
-than of a document. An earlier 100% (25/25) recorded here was a lucky run.
+The previous run scored 91%, and all three failures were the same defect, found
+by the precision cases the moment they were added: gate 1's *model* pass refused
+`prec-quinine-rate`, `prec-malaria-travel` and `prec-empyema-abx` as
+`personalized_advice` before retrieval ran, reasoning "advice for a tourist's
+situation", "treatment advice for a child". None of those queries names a
+specific person. Its definition said "a specific person" but every example was
+first-person, so an *indefinite* third party fell in a gap the examples never
+covered. Fixed by naming that case explicitly (see "Framing is the boundary"
+below) and bumping `guardrails_version`.
+
+Retrieval has not missed once across both runs: every case that reached it
+cited the chunk asserted by `expect_text`.
+
+**The corrective band is still worth watching.** `una-vaccine-temp` is
+unanswerable and scores 4.0 on the first pass; the corrective retry surfaces
+passages scoring **7.0**, clearing the 5.5 threshold. Gate 2 passes it, and only
+the generator declining for insufficient context keeps it from being answered —
+in both runs. The bar never moved, but a retry that raises an unanswerable
+query by three points is exactly the leak this band risks, and it took one eval
+case to demonstrate. `una-clavicle` behaves correctly, staying at 4.0.
+
+So the old claim that "answerable queries score 9-10 and unanswerable ones 0.0"
+holds only for the easy unanswerable cases — whole specialties nobody ingested.
+Near-miss cases inside covered specialties sit at 4.0, and one reaches 7.0 after
+correction.
 Re-run before quoting these, and treat false refusal rate as the noisy metric.
 
 ## Setup
@@ -264,7 +339,7 @@ src/rag_project/
   corpus/manifest.py sha256 document allow-list
   ingest/            PDF → sections → chunks
   indexing/          embeddings, BM25, vector store, index manifest
-  retrieval/         rewrite, HyDE, hybrid search, rerank
+  retrieval/         rewrite, HyDE, hybrid search, rerank, corrective retry
   guardrails/        policy + the three gates
   evaluation/        eval set, runner, threshold calibration
   cache.py           read-through Redis cache; never fails closed

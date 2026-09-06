@@ -132,7 +132,9 @@ def _unit(vector) -> np.ndarray:
     return v if norm == 0.0 else v / norm
 
 
-def query_vector(rewritten: str, embedder) -> tuple[list[float], dict]:
+def query_vector(
+    rewritten: str, embedder, query_weight: float | None = None
+) -> tuple[list[float], dict]:
     """The vector the dense half searches with, plus what happened.
 
     `rewritten` is the output of retrieval.rewrite -- normalised, with the
@@ -141,6 +143,11 @@ def query_vector(rewritten: str, embedder) -> tuple[list[float], dict]:
     own disambiguation ("ARI" is acute respiratory infection here), and
     handing it over is cheaper and safer than letting the model guess which
     reading of an abbreviation the corpus meant.
+
+    `query_weight` overrides `hyde_query_weight` for one call. The corrective
+    pass uses it to lean further onto the hypothetical, having just watched the
+    literal query fail -- passed as an argument rather than set on the settings
+    singleton, which is process-wide and shared across concurrent requests.
     """
     s = get_settings()
     base = embedder.embed_one(rewritten)
@@ -163,7 +170,8 @@ def query_vector(rewritten: str, embedder) -> tuple[list[float], dict]:
 
     # Clamped rather than validated at config time so a bad env var degrades to
     # a sane blend instead of failing every query at import.
-    w = min(1.0, max(0.0, s.hyde_query_weight))
+    raw_w = s.hyde_query_weight if query_weight is None else query_weight
+    w = min(1.0, max(0.0, raw_w))
     hypothetical = np.mean([_unit(embedder.embed_one(p)) for p in passages], axis=0)
     blended = _unit(w * _unit(base) + (1.0 - w) * _unit(hypothetical))
 

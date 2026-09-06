@@ -1,10 +1,16 @@
 """End-to-end query pipeline.
 
     intent gate -> retrieve -> rerank -> confidence gate -> generate -> output gate
+                                              |
+                                    (corrective band: retry once, then re-judge)
 
 Every exit produces a Response. There is no path that returns raw model text,
 and no path that skips a gate: a refusal at any stage returns the standard
 message for that reason from guardrails.policy, with the trace explaining why.
+
+Gate 2 has three outcomes rather than two. Its middle band retries retrieval
+once and re-judges against the same threshold; it can delay a decision, never
+soften one. See retrieval/corrective.py.
 """
 
 from __future__ import annotations
@@ -18,7 +24,8 @@ from .generation.generate import generate
 from .guardrails import confidence, output_gate
 from .guardrails.input_gate import classify
 from .guardrails.policy import DISCLAIMER, refusal_text
-from .models import Intent, RefusalReason, Response, Retrieved
+from .models import ConfidenceAction, Intent, RefusalReason, Response, Retrieved
+from .retrieval import corrective
 from .retrieval.rerank import LLMReranker, Reranker
 from .retrieval.rewrite import normalise
 from .retrieval.search import HybridRetriever
@@ -40,6 +47,17 @@ def _refuse(query: str, reason: RefusalReason, trace: dict, top: float | None = 
         disclaimer=DISCLAIMER,
         trace=trace,
     )
+
+
+def _confidence_trace(conf: confidence.ConfidenceVerdict) -> dict:
+    return {
+        "passed": conf.passed,
+        "action": conf.action.value,
+        "top_score": conf.top_score,
+        "threshold": conf.threshold,
+        "reason": conf.reason,
+        "kept": len(conf.kept),
+    }
 
 
 def _citations(kept: list[Retrieved]) -> list[dict]:
@@ -138,14 +156,22 @@ class Assistant:
 
         # --- Gate 2 ------------------------------------------------------
         conf = confidence.evaluate(results)
-        trace["confidence"] = {
-            "passed": conf.passed,
-            "top_score": conf.top_score,
-            "threshold": conf.threshold,
-            "reason": conf.reason,
-            "kept": len(conf.kept),
-        }
+        trace["confidence"] = _confidence_trace(conf)
         trace["stages"].append("confidence")
+
+        # Middle band: retrieval landed in the right subject area but did not
+        # answer. Retry once, then judge again at the SAME threshold -- the
+        # second evaluate() forbids further correction, so this cannot loop.
+        if conf.action is ConfidenceAction.CORRECT:
+            results, ctrace = corrective.correct(
+                self.retriever, self.reranker, query, results
+            )
+            trace["corrective"] = ctrace
+            trace["stages"].append("corrective")
+
+            conf = confidence.evaluate(results, allow_correction=False)
+            trace["confidence_after_correction"] = _confidence_trace(conf)
+
         if not conf.passed:
             return _refuse(query, RefusalReason.LOW_CONFIDENCE, trace, conf.top_score)
 

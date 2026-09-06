@@ -256,6 +256,9 @@ button.primary.busy .spinner { display:block; animation:spin .7s linear infinite
 }
 .stage.ok::before   { border-color:var(--ok);  background:var(--ok); box-shadow:0 0 0 3px var(--ok-soft); }
 .stage.fail::before { border-color:var(--bad); background:var(--bad); box-shadow:0 0 0 3px var(--bad-soft); }
+/* Neither passed nor refused: the corrective band, and a retry that ran
+   without improving anything. Distinct from fail -- the pipeline continued. */
+.stage.warn::before { border-color:var(--warn); background:var(--warn); box-shadow:0 0 0 3px var(--warn-soft); }
 .stage.unreached { opacity:.5; }
 .stage-label { font-weight:600; color:var(--ink-2); }
 .stage-sum { color:var(--dim); font-size:.83rem; line-height:1.5; word-break:break-word; }
@@ -355,6 +358,7 @@ const STAGES = [
   ["retrieve",    "Retrieve"],
   ["rerank",      "Rerank"],
   ["confidence",  "Gate 2 · confidence"],
+  ["corrective",  "Corrective retry"],
   ["generate",    "Generate"],
   ["output_gate", "Gate 3 · output"],
 ];
@@ -431,10 +435,20 @@ function stageState(key, trace) {
                 + (s.length ? s.map((x) => num(x, 0)).join(", ") : "no scores")];
   }
   if (key === "confidence") {
-    const c = trace.confidence || {};
-    return [c.passed ? "ok" : "fail",
+    // After a corrective retry it is the SECOND verdict that decided, so show
+    // that one -- otherwise the rail reports a refusal the pipeline overturned.
+    const c = trace.confidence_after_correction || trace.confidence || {};
+    return [c.passed ? "ok" : (c.action === "correct" ? "warn" : "fail"),
       `top ${num(c.top_score, 1)} vs threshold ${c.threshold} · kept ${c.kept || 0}`
       + ` — ${c.reason || ""}`];
+  }
+  if (key === "corrective") {
+    const cr = trace.corrective || {};
+    if (!cr.ran) return ["fail", cr.reason || "did not run"];
+    return [cr.improved ? "ok" : "warn",
+      `+${cr.new_candidates || 0} new of ${cr.pool || 0} · top `
+      + `${num(cr.top_before, 1)} → ${num(cr.top_after, 1)}`
+      + (cr.improved ? "" : " (no improvement)")];
   }
   if (key === "generate") {
     const g = trace.generation || {};

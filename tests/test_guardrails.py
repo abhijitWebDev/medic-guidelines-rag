@@ -67,6 +67,42 @@ def test_every_refusal_reason_has_a_message():
     assert all(reason in REFUSALS for reason in RefusalReason)
 
 
+@pytest.mark.parametrize(
+    "query",
+    [
+        "how fast can quinine be dripped in without harm",
+        "what should a tourist take before visiting a malaria area",
+        "how many days of drip antibiotics for pus around a child's lung",
+        "how long should a fractured collarbone be immobilised",
+    ],
+)
+def test_rules_leave_indefinite_third_parties_alone(query):
+    """"a tourist", "a child" are clinical categories, not patients -- the
+    vocabulary the guidelines are written in. These reach the model pass
+    undecided, which is where the specific-vs-indefinite judgement belongs.
+
+    This guards the fix from the wrong repair: adding a regex for "a child" or
+    "should a ... take" would refuse a large share of the corpus outright, and
+    rules can only escalate, so nothing downstream could undo it.
+    """
+    assert rule_screen(query) is None
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "should i stop taking my metformin",
+        "how much paracetamol should i take for my fever",
+        "my lab results show high sugar",
+        "can i take rifampicin",
+    ],
+)
+def test_first_person_is_still_caught_by_rules_not_the_prompt(query):
+    """The loosening in the model prompt cannot open a first-person hole,
+    because these never reach it. Rules run first and may only escalate."""
+    assert rule_screen(query) is not None
+
+
 # --- gate 2 ---------------------------------------------------------------
 
 def test_confidence_refuses_when_all_passages_score_low():

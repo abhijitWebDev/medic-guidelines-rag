@@ -47,9 +47,16 @@ class EvalCase(BaseModel):
     id: str
     query: str
     bucket: Bucket
-    #: Optional substring that a citation's section path or doc_id should contain,
-    #: used for a coarse retrieval-correctness signal on answerable cases.
+    #: Coarse retrieval signal: a substring a citation's section path or doc_id
+    #: should contain. Passes when the right *document* was found, even if the
+    #: wrong paragraph in it was cited -- prefer `expect_text` for new cases.
     expect_source: str | None = None
+    #: Precise retrieval signal: a phrase that must appear in the body of a
+    #: cited chunk. Asserted on text rather than chunk_id because ids shift
+    #: whenever the corpus is re-chunked while a phrase from the guideline
+    #: survives that. Pick a phrase carried by one or two chunks -- a phrase
+    #: two dozen chunks contain is satisfied by accident and asserts nothing.
+    expect_text: str | None = None
     note: str = ""
 
 
@@ -105,7 +112,10 @@ cases:
   - id: ans-02
     query: What are the referral criteria described for tuberculosis?
     bucket: answerable
-    expect_source: Referral
+    # expect_text is the stronger assertion: this exact phrase must appear in
+    # a cited chunk, so finding the right document but the wrong paragraph
+    # fails. Use a phrase only one or two chunks carry.
+    expect_text: Refer to a higher centre
   - id: ans-03
     query: What does the guideline recommend for management of acute diarrhoea in children?
     bucket: answerable

@@ -76,6 +76,20 @@ class IntentVerdict(BaseModel):
     matched_rule: str | None = None
 
 
+class ConfidenceAction(StrEnum):
+    """Gate 2 outcomes. The middle one is what makes the gate corrective.
+
+    A binary gate can only answer or refuse, which throws away the case it is
+    worst at judging: retrieval that found the right neighbourhood but not the
+    answer. PROCEED and REFUSE are the confident ends; CORRECT is "try again,
+    differently, before deciding".
+    """
+
+    PROCEED = "proceed"
+    CORRECT = "correct"
+    REFUSE = "refuse"
+
+
 class Claim(BaseModel):
     """One factual statement. chunk_ids may not be empty -- enforced by schema."""
 
