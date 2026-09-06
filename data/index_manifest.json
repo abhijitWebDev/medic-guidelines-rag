@@ -1,7 +1,7 @@
 {
   "index_version": "v1",
   "table": "medic-guidelines",
-  "built_at": "2026-08-27T10:20:36+00:00",
+  "built_at": "2026-09-06T03:23:43+00:00",
   "embedding": {
     "model": "text-embedding-3-large",
     "dim": 3072
@@ -16,10 +16,10 @@
     "note": "the deployed LanceDB wrapper exposes vector search only"
   },
   "counts": {
-    "chunks": 3414,
-    "inserted": 3414,
-    "documents": 20,
-    "skipped_documents": 1
+    "chunks": 3547,
+    "inserted": 3547,
+    "documents": 21,
+    "skipped_documents": 0
   },
   "documents": [
     {
@@ -54,6 +54,13 @@
       "doc_id": "critical-care",
       "title": "Guidelines For The Management Of Critical Care",
       "sha256": "f8cb9cf5293798812b2725c59e0cab19c4f89cd7792314cef13e2fce1bf0cd84",
+      "url": "",
+      "version": null
+    },
+    {
+      "doc_id": "dengue",
+      "title": "National Guidelines for Clinical Management of Dengue Fever",
+      "sha256": "ef5c9dd751ba3c2bf193e87584cb7bcbea6c22899cd27a058055e41fc003b150",
       "url": "",
       "version": null
     },
@@ -163,11 +170,5 @@
       "version": null
     }
   ],
-  "skipped_documents": [
-    {
-      "doc_id": "dengue",
-      "title": "Dengue",
-      "filename": "dengue.pdf"
-    }
-  ]
+  "skipped_documents": []
 }

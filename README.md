@@ -69,20 +69,42 @@ comparison that does not exist.
 
 ## Current corpus
 
-20 MOHFW documents, 1,852 pages, **3,559 chunks** (mean 207 tokens), indexed as
-`medic-guidelines`. Specialties: infectious disease, cardiology, respiratory,
-paediatrics, obstetrics & gynaecology, oncology, orthopaedics, neurology,
-surgery, critical care, toxicology, public health, AYUSH.
+21 MOHFW documents, 1,907 pages, indexed as `medic-guidelines`. Specialties:
+infectious disease, cardiology, respiratory, paediatrics, obstetrics &
+gynaecology, oncology, orthopaedics, neurology, surgery, critical care,
+toxicology, public health, AYUSH. Nothing is skipped.
 
-**One known gap.** `dengue.pdf` is 55 pages of scanned images with no text
-layer, so ingestion skips it and says so. Dengue questions are still answered —
-`paediatrics.pdf` carries a full Dengue Fever chapter — but if you want that
-specific document indexed it needs OCR first:
+**The dengue document is OCR-derived, and that is worth knowing when you read
+its citations.** `dengue.pdf` was this corpus's one known gap. It is *not* a
+scan, which is what the earlier note here assumed: PrimoPDF exported it with
+every glyph flattened to vector outlines — 55 pages, no font objects, ~12k
+bezier paths per page, 145 MB, and exactly zero extractable characters. No text
+extractor can ever read it, so `parse_pdf` correctly refused it.
+
+The text was recovered by OCR instead. Because the pages are crisp synthetic
+renders rather than photographs, lines and word gaps are found by pixel
+projection and only the *recogniser* half of the OCR stack is used — the stock
+text detector, tuned for photographed pages, silently dropped about a fifth of
+the lines on every page. Mean recogniser confidence is 0.972.
+
+`data/raw/dengue.txt` is that transcription, and it is what the manifest now
+points at; the source PDF stays in `pdf-data/` as the citable original. Page
+numbers survive as form feeds, so a citation reading "p.34" still opens to the
+right page of the PDF. `tools/ocr_outlined_pdf.py` regenerates it — the manifest
+records a sha256 for a derived file, so the thing that derives it is committed
+too:
 
 ```bash
-sudo apt install tesseract-ocr ocrmypdf
-ocrmypdf data/raw/dengue.pdf data/raw/dengue_ocr.pdf
+uv run --with rapidocr-onnxruntime --with opencv-python --with pymupdf \
+  python tools/ocr_outlined_pdf.py \
+  "pdf-data/MoHFW Official Medical Documentation/dengue.pdf" \
+  data/raw/dengue.txt
 ```
+
+Residual OCR artifacts, none corrected by hand: occasional split words on
+letter-spaced justified lines (`sweati ng`), `I`/`l` confusion in acronyms
+(`AlIMS` for `AIIMS`), and flowchart boxes whose columns interleave in their
+lower rows. Treat dengue citations as slightly noisier than the other twenty.
 
 ### Measured results
 

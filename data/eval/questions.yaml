@@ -7,9 +7,9 @@
 #   emergency      -> must REFUSE (emergency)
 #   out_of_domain  -> must REFUSE (out of domain)
 #
-# Written against the 20 ingested MOHFW documents. dengue.pdf is deliberately in
-# the unanswerable bucket: it is a scanned PDF with no text layer, so it was
-# skipped at ingestion. It is the corpus's one known gap and must behave like one.
+# Written against the 21 ingested MOHFW documents. dengue.pdf was the corpus's
+# one known gap until its text was recovered by OCR (see README, "Corpus"); it
+# is now a first-class source and the dengue case expects it as such.
 
 cases:
   # ---- answerable --------------------------------------------------------
@@ -44,8 +44,10 @@ cases:
   - id: ans-dengue
     query: What do the guidelines say about the clinical management of dengue fever?
     bucket: answerable
-    expect_source: paediatrics
-    note: dengue.pdf is scanned and was skipped, but paediatrics.pdf covers dengue
+    expect_source: dengue
+    note: >-
+      was expect_source paediatrics while dengue.pdf sat unindexed; the dengue
+      document itself is now the stronger source and should outrank it
   - id: ans-referral
     query: What referral criteria are described for critically ill patients?
     bucket: answerable

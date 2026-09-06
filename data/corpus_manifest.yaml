@@ -53,15 +53,15 @@ documents:
   license: Government of India public health advisory
   sha256: f8cb9cf5293798812b2725c59e0cab19c4f89cd7792314cef13e2fce1bf0cd84
 - doc_id: dengue
-  title: Dengue
-  filename: dengue.pdf
+  title: National Guidelines for Clinical Management of Dengue Fever
+  filename: dengue.txt
   url: ''
   publisher: MOHFW, Government of India
   specialty: Infectious Disease
   version: null
-  published: null
+  published: '2014-12-19'
   license: Government of India public health advisory
-  sha256: 89da687c8a0f4f535740499b180ab17d8091aeadf8ea5e4138da99bbed12ecaa
+  sha256: ef5c9dd751ba3c2bf193e87584cb7bcbea6c22899cd27a058055e41fc003b150
 - doc_id: general-surgery
   title: Standard Treatment Guidelines General Surgery
   filename: general_surgery.pdf
