@@ -414,7 +414,14 @@ function stageState(key, trace) {
   if (key === "retrieve") {
     const r = trace.retrieval || {};
     const exp = (r.expansions || []).length ? ` · expanded ${r.expansions.join(", ")}` : "";
-    return ["ok", `${r.dense_hits || 0} dense · ${r.lexical_hits || 0} lexical `
+    // Which query the dense half actually searched with. The hypothetical
+    // passage itself is in the trace payload but is deliberately not rendered:
+    // it is model-authored medical prose that nothing in this pipeline
+    // verified, and showing it beside verified citations would invite reading
+    // it as source material. It is never quoted and never cited -- see hyde.py.
+    const h = r.hyde || {};
+    const hy = h.used ? ` · hyde ${Math.round((1 - h.query_weight) * 100)}%` : "";
+    return ["ok", `${r.dense_hits || 0} dense${hy} · ${r.lexical_hits || 0} lexical `
                 + `→ ${r.fused_pool || 0} fused${exp}`];
   }
   if (key === "rerank") {

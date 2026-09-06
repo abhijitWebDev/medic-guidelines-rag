@@ -15,6 +15,8 @@ query
  ├─ GATE 1  intent          personalized / emergency / off-domain → refuse
  │                          (no retrieval happens for a refused query)
  ├─ rewrite                 conservative, additive abbreviation expansion
+ ├─ HyDE                    hypothetical answer blended into the query vector
+ │                          (dense half only; falls back to the query alone)
  ├─ retrieve                dense (remote) + BM25 (local), fused with RRF
  ├─ rerank                  absolute 0–10 relevance score per passage
  ├─ GATE 2  confidence      top-1 score < threshold → "not enough information"
@@ -66,6 +68,29 @@ before it was fixed.
 **RRF fuses ranks, not scores.** BM25 scores are unbounded and corpus-relative;
 cosine similarity is bounded. Normalising them together would invent a
 comparison that does not exist.
+
+**HyDE is blended, not substituted, and only on the dense half.** A question and
+the passage answering it are written in different registers — "How is
+drug-resistant TB confirmed?" shares almost no words with "Culture and drug
+susceptibility testing is performed on all presumptive DR-TB cases…" — so the
+dense half searches with a generated hypothetical passage mixed into the query
+vector at `hyde_query_weight` (0.5 by default). Textbook HyDE throws the query
+away and searches with the generation alone; here the query stays in the mix, so
+a hypothetical that drifts to the wrong condition pulls retrieval partway rather
+than replacing the target. BM25 goes on searching the literal query, because
+exact drug names and abbreviations are exactly what eighty words of generated
+prose would bury.
+
+**The hypothetical document is never shown, cited, or generated from.** It is
+embedded and discarded. It never reaches the reranker, the generator, or the
+citation list — every sentence a user reads still comes from a retrieved chunk
+that gate 3 verified. A fabricated passage can change *which* real guidance is
+found; it cannot change what is asserted. This is the one component that fails
+*open*: an unavailable model here means falling back to the plain query vector,
+not refusing, because HyDE is a retrieval improvement and not a gate. The
+fallback is recorded as a degradation so a weaker retrieval path is never cached.
+
+    uv run rag ask "..." --no-hyde --trace     # or HYDE_ENABLED=false
 
 ## Current corpus
 
@@ -239,7 +264,7 @@ src/rag_project/
   corpus/manifest.py sha256 document allow-list
   ingest/            PDF → sections → chunks
   indexing/          embeddings, BM25, vector store, index manifest
-  retrieval/         rewrite, hybrid search, rerank
+  retrieval/         rewrite, HyDE, hybrid search, rerank
   guardrails/        policy + the three gates
   evaluation/        eval set, runner, threshold calibration
   cache.py           read-through Redis cache; never fails closed

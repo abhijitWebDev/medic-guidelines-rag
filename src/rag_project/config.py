@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     # Whole responses. Shorter: the corpus is medical guidance, and a day is
     # the longest we want a stale-but-valid answer circulating.
     cache_response_ttl_s: int = 24 * 3600
+    # Hypothetical documents (see retrieval/hyde.py). Long: the passage never
+    # reaches a user and depends only on the query and the HyDE prompt, so
+    # staleness costs nothing -- `hyde_version` is what invalidates it.
+    cache_hyde_ttl_s: int = 7 * 24 * 3600
 
     # --- Access control --------------------------------------------------
     # Empty disables the gate entirely, which is the default: local work and
@@ -84,6 +88,25 @@ class Settings(BaseSettings):
     # Gate 2. Provisional -- overwritten by data/calibration.json once the
     # eval harness has actually measured it. Never trust this default.
     confidence_threshold: float = 5.0
+
+    # --- HyDE ------------------------------------------------------------
+    # Search the dense half with a generated hypothetical answer blended into
+    # the query vector. See retrieval/hyde.py for why it is blended rather
+    # than substituted. Set HYDE_ENABLED=false to A/B it against plain dense
+    # retrieval -- the fingerprint below covers these, so the two runs do not
+    # share cached answers.
+    hyde_enabled: bool = True
+    # Passages per query, generated in one call. >1 averages several drafts to
+    # damp a single unlucky generation, at one extra embedding call each.
+    hyde_n: int = 1
+    # Share of the blend kept by the real query. 1.0 disables HyDE in effect;
+    # 0.0 is textbook HyDE, which this project deliberately does not do.
+    hyde_query_weight: float = 0.5
+    # None uses openai_guard_model. This is a cheap, high-volume call.
+    hyde_model: str | None = None
+    # Bumped by hand when the HyDE prompt changes, for the same reason as
+    # guardrails_version: the fingerprint cannot see prompt text.
+    hyde_version: str = "v1"
 
     # --- Guardrails ------------------------------------------------------
     # Bumped by hand whenever a gate prompt or gate rule changes. The
@@ -125,6 +148,11 @@ class Settings(BaseSettings):
                 self.rerank_top_n,
                 self.confidence_threshold,
                 self.guardrails_version,
+                self.hyde_enabled,
+                self.hyde_n,
+                self.hyde_query_weight,
+                self.hyde_model,
+                self.hyde_version,
             )
         )
         return hashlib.sha256(material.encode()).hexdigest()[:16]

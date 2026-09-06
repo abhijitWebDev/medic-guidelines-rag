@@ -149,6 +149,14 @@ def _cmd_ask(args: argparse.Namespace) -> int:
     from .indexing.store import StoreError
     from .retrieval.search import RetrievalError
 
+    # Mutating the settings singleton is fine in a one-shot CLI process, and
+    # the response cache key is derived from these (pipeline_fingerprint), so
+    # a --no-hyde run cannot be served a HyDE-retrieved answer.
+    if args.no_hyde:
+        from .config import get_settings
+
+        get_settings().hyde_enabled = False
+
     try:
         assistant = Assistant.build()
         response = assistant.ask(
@@ -353,6 +361,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-cache",
         action="store_true",
         help="re-run the pipeline instead of reusing a cached answer",
+    )
+    ask.add_argument(
+        "--no-hyde",
+        action="store_true",
+        help="search with the query vector alone, without a hypothetical answer",
     )
     ask.set_defaults(func=_cmd_ask)
 

@@ -4,6 +4,11 @@ Both halves must describe the same corpus or the fusion is meaningless. That is
 enforced structurally: the dense half resolves its hits back to the *local*
 chunk objects by chunk_id, so a chunk present remotely but absent locally is
 reported rather than silently half-retrieved.
+
+The two halves do *not* search with the same query, and that asymmetry is
+deliberate: the dense half searches with a HyDE-blended vector, the lexical
+half with the literal rewritten string. Same corpus, different query
+representations -- which is the entire reason to fuse them. See hyde.py.
 """
 
 from __future__ import annotations
@@ -13,6 +18,7 @@ from ..indexing.embed import Embedder
 from ..indexing.store import VectorStore, get_store
 from ..ingest.pipeline import load_chunks
 from ..models import Chunk, Retrieved
+from . import hyde
 from .rewrite import rewrite
 
 
@@ -41,8 +47,10 @@ class HybridRetriever:
     def retrieve(self, query: str, k: int = 20) -> tuple[list[Retrieved], dict]:
         rewritten, applied = rewrite(query)
 
-        # Dense half (remote).
-        qv = self.embedder.embed_one(rewritten)
+        # Dense half (remote). HyDE blends a generated hypothetical passage
+        # into the query vector; it degrades to the plain query vector when
+        # the model is unavailable, and never touches the lexical half below.
+        qv, hyde_trace = hyde.query_vector(rewritten, self.embedder)
         raw_hits = self.store.search(qv, limit=k)
         dense: list[tuple[Chunk, float]] = []
         orphans: list[str] = []
@@ -85,6 +93,7 @@ class HybridRetriever:
             "query": query,
             "rewritten": rewritten,
             "expansions": applied,
+            "hyde": hyde_trace,
             "dense_hits": len(dense),
             "lexical_hits": len(lexical),
             "fused_pool": len(fused),
