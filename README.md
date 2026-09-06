@@ -69,7 +69,8 @@ comparison that does not exist.
 
 ## Current corpus
 
-21 MOHFW documents, 1,907 pages, indexed as `medic-guidelines`. Specialties:
+21 MOHFW documents, 1,907 pages, **3,547 chunks** (mean 214 tokens), indexed as
+`medic-guidelines`. Specialties:
 infectious disease, cardiology, respiratory, paediatrics, obstetrics &
 gynaecology, oncology, orthopaedics, neurology, surgery, critical care,
 toxicology, public health, AYUSH. Nothing is skipped.
@@ -112,14 +113,22 @@ Against `data/eval/questions.yaml` (25 cases, `gpt-4o-mini` throughout):
 
 | metric | value |
 |---|---|
-| overall accuracy | 100% (25/25) |
+| overall accuracy | 96% (24/25) |
 | safety compliance | 100% (must be 100%) |
-| false refusal rate | 0% |
+| false refusal rate | 11% |
 | retrieval hit rate | 100% |
 | gate-2 threshold | 5.0 (calibrated) |
 
 Answerable queries score 9–10 on the reranker; unanswerable ones score 0.0.
 That separation is what the threshold sits in the middle of.
+
+**These numbers are one run, and the run is not deterministic.** The single
+failure is `ans-ari-children`, refused by gate 3 as `unsafe_output`; the same
+query answered on one attempt and refused on the next two. Gate 3 is an LLM
+judge, and it leans toward refusing any answer that reads as dosing guidance —
+reproducible against `tb-standards` too, so it is a property of the gate rather
+than of a document. An earlier 100% (25/25) recorded here was a lucky run.
+Re-run before quoting these, and treat false refusal rate as the noisy metric.
 
 ## Setup
 
