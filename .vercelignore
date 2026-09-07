@@ -11,6 +11,7 @@
 .venv/
 data/embed_cache/
 data/lancedb/
+data/app.db
 data/raw/
 pdf-data/
 __pycache__/

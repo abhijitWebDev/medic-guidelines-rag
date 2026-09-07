@@ -319,6 +319,77 @@ def _cmd_eval_calibrate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_users_list(args: argparse.Namespace) -> int:
+    from .db import StorageError, users as user_store
+
+    try:
+        users = user_store.all_users()
+    except StorageError as e:
+        console.print(f"[red]Account store unavailable:[/] {e}")
+        return 1
+
+    if not users:
+        console.print("No accounts yet. Anyone can create one from the sign-in page.")
+        return 0
+
+    table = Table(title=f"Accounts ({len(users)})")
+    table.add_column("email")
+    table.add_column("created")
+    table.add_column("turns", justify="right")
+    table.add_column("id", style="dim")
+    from .db import history
+
+    for u in users:
+        # Count is capped by history_max_items anyway, so this stays cheap.
+        n = len(history.list_for(u.id, limit=100))
+        table.add_row(u.email, u.created_at[:16].replace("T", " "), str(n), u.id)
+    console.print(table)
+    return 0
+
+
+def _cmd_users_add(args: argparse.Namespace) -> int:
+    """Create an account without going through the web form.
+
+    Signup is open, so this is a convenience rather than the only way in --
+    useful for seeding a fresh database, or for adding someone who should not
+    have to pick their own password over email.
+    """
+    import getpass
+
+    from .db import AccountError, StorageError, users
+
+    password = args.password or getpass.getpass("Password: ")
+    try:
+        user = users.create(args.email, password)
+    except AccountError as e:
+        console.print(f"[red]{e}[/]")
+        return 1
+    except StorageError as e:
+        console.print(f"[red]Account store unavailable:[/] {e}")
+        return 1
+    console.print(f"[green]Created[/] {user.email} ({user.id})")
+    return 0
+
+
+def _cmd_users_delete(args: argparse.Namespace) -> int:
+    from .db import StorageError, users
+
+    try:
+        target = next(
+            (u for u in users.all_users() if u.email == users.normalise_email(args.email)),
+            None,
+        )
+        if target is None:
+            console.print(f"[yellow]No account for {args.email}.[/]")
+            return 1
+        users.delete(target.id)
+    except StorageError as e:
+        console.print(f"[red]Account store unavailable:[/] {e}")
+        return 1
+    console.print(f"[green]Deleted[/] {target.email} and everything it asked.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="rag", description="Medical Guideline Assistant")
     sub = p.add_subparsers(dest="command", required=True)
@@ -381,6 +452,20 @@ def build_parser() -> argparse.ArgumentParser:
     ec = esub.add_parser("calibrate", help="tune the confidence threshold")
     ec.add_argument("--write", action="store_true", help="save to data/calibration.json")
     ec.set_defaults(func=_cmd_eval_calibrate)
+
+    users = sub.add_parser("users", help="manage accounts and their history")
+    usub = users.add_subparsers(dest="subcommand", required=True)
+    usub.add_parser("list", help="show every account").set_defaults(func=_cmd_users_list)
+    ua = usub.add_parser("add", help="create an account")
+    ua.add_argument("email")
+    ua.add_argument(
+        "--password",
+        help="read from a prompt if omitted, which keeps it out of shell history",
+    )
+    ua.set_defaults(func=_cmd_users_add)
+    ud = usub.add_parser("delete", help="delete an account and all of its history")
+    ud.add_argument("email")
+    ud.set_defaults(func=_cmd_users_delete)
 
     store = sub.add_parser("store", help="inspect the vector store")
     ssub = store.add_subparsers(dest="subcommand", required=True)

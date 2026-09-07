@@ -115,3 +115,36 @@ def test_static_page_is_reachable_from_the_installed_package():
     HTML would break the UI while every test still passed."""
     assert (api_mod.STATIC / "index.html").is_file()
     assert Path(api_mod.STATIC).name == "static"
+
+
+def test_hidden_attribute_is_enforced_against_author_display_rules():
+    """The browser hides `[hidden]` from its own stylesheet, at a specificity
+    any author rule setting `display` outranks. The verification banner is
+    styled `display:flex`, so without this guard `el.hidden = true` did
+    nothing and the banner showed permanently -- including to accounts that
+    had already confirmed, and on instances with no accounts at all.
+    """
+    css = UI_SRC.split("<style>", 1)[1].split("</style>", 1)[0]
+    assert re.search(r"\[hidden\]\s*\{[^}]*display:\s*none\s*!important", css), (
+        "no [hidden] guard: any element whose class sets `display` will ignore "
+        "the attribute the JS toggles"
+    )
+
+
+def test_every_js_toggled_element_relies_on_that_guard():
+    """Names the elements the rule above is protecting, so that removing it
+    fails here with the list rather than silently somewhere in a browser."""
+    toggled = set(re.findall(r'\$\("([a-z-]+)"\)\.hidden\s*=', UI_SRC))
+    assert {"verify", "history", "signout"} <= toggled, (
+        f"the set of hidden-toggled elements changed: {sorted(toggled)}"
+    )
+
+
+def test_the_composer_is_restored_when_verification_passes():
+    """applyVerification runs again after confirming an address, so it has to
+    re-enable the box as well as disable it -- otherwise verifying leaves the
+    composer greyed out until a reload."""
+    block = re.search(r"function applyVerification\(info\)\s*\{(.*?)\n\}", UI_SRC, re.S)
+    assert block, "applyVerification not found"
+    body = block.group(1)
+    assert 'disabled = !verified' in body, "the disabled state is only ever set one way"

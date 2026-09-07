@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pymupdf
@@ -8,27 +9,77 @@ import pytest
 from rag_project import security
 from rag_project.cache import reset_cache
 from rag_project.config import get_settings
+from rag_project.db import get_db, reset_db
 from rag_project.models import SourceDoc
 
 
 @pytest.fixture(autouse=True)
-def isolate_from_live_redis(monkeypatch):
-    """No test may touch the real Upstash instance.
+def isolate_from_live_services(monkeypatch, tmp_path):
+    """No test may touch the real Upstash instance or a real database.
 
     .env carries a live REDIS_URL, so without this the suite reads and writes
     production keys: rate-limit counters survive between runs (making the
     limiter tests pass alone and fail together), and cached answers for test
     queries pile up in a store real users share. Tests that want Redis build
     their own client -- see tests/test_cache.py.
+
+    The same applies to accounts. DATABASE_URL is cleared and the SQLite
+    fallback is pointed at a fresh file per test, so no test can read or write
+    a real person's account or history, and no test inherits another's users.
+    APP_PASSWORD is cleared for a subtler reason: it is deprecated as a
+    credential but still forces the auth gate on, so leaving it set would make
+    every test in the suite require a login.
     """
     monkeypatch.setenv("REDIS_URL", "")
+    monkeypatch.setenv("APP_PASSWORD", "")
+    monkeypatch.setenv("SQLITE_PATH", str(tmp_path / "accounts.db"))
+    # No test may send email, and none may depend on whether the developer
+    # happens to have SES configured. Both matter: .env carries live SES
+    # credentials once someone sets them up, so without this a signup test
+    # opens a real SMTP connection to Amazon -- and a suite that passes on a
+    # laptop with no MAIL_FROM starts failing on one that has it, because
+    # configuring mail is what turns verification on. Tests that want a mailer
+    # set these themselves; see tests/test_email.py.
+    monkeypatch.setenv("SES_SMTP_HOST", "")
+    monkeypatch.setenv("SES_SMTP_USER", "")
+    monkeypatch.setenv("SES_SMTP_PASSWORD", "")
+    monkeypatch.setenv("MAIL_FROM", "")
+    monkeypatch.setenv("PUBLIC_BASE_URL", "")
+    # SQLite unless a throwaway Postgres is offered. Both backends share every
+    # statement, so the suite passing on SQLite is most of the evidence -- but
+    # only Postgres can prove the dialect translation, the type mapping and the
+    # pool actually work, so it is worth being able to point the same tests at
+    # one:  TEST_DATABASE_URL=postgresql://... uv run pytest
+    postgres = os.environ.get("TEST_DATABASE_URL", "")
+    monkeypatch.setenv("DATABASE_URL", postgres)
+    # Pinned off, so that offering the suite a database changes *where rows go*
+    # and nothing else. Without this, running with TEST_DATABASE_URL would also
+    # switch the auth gate on (see Settings.auth_required) and every test of the
+    # open instance would start failing on a 401. Tests about accounts turn it
+    # on for themselves.
+    monkeypatch.setenv("AUTH_ENABLED", "false")
+    # Fixed so tokens issued in one request verify in the next; without it each
+    # process invents a key, which is right for production and useless here.
+    monkeypatch.setenv("SESSION_SECRET", "test-session-secret")
     get_settings.cache_clear()
     reset_cache()
+    reset_db()
+    if postgres:
+        # A shared server has no per-test tmp_path. Dropping the tables leaves
+        # the next get_db() to recreate them, which is the same isolation the
+        # SQLite path gets for free from a fresh file.
+        db = get_db()
+        db.execute("DROP TABLE IF EXISTS history")
+        db.execute("DROP TABLE IF EXISTS users")
+        reset_db()
     security.reset_rate_limits()
+    security.reset_sessions()
     yield
     get_settings.cache_clear()
     reset_cache()
+    reset_db()
     security.reset_rate_limits()
+    security.reset_sessions()
 
 
 def _build_pdf(path: Path, blocks: list[tuple[str, float, bool]]) -> Path:

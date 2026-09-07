@@ -9,18 +9,20 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%230b63ce'/><path d='M28 14h8v14h14v8H36v14h-8V36H14v-8h14z' fill='white'/></svg>">
 <style>
 :root {
-  --bg:#f7f9fb; --surface:#fff; --ink:#0f151c; --ink-2:#3d4854; --dim:#697585;
+  --bg:#f7f9fb; --surface:#fff; --surface-2:#f1f4f8; --ink:#0f151c; --ink-2:#3d4854; --dim:#697585;
   --line:#e2e8f0; --line-2:#cfd8e3; --accent:#0b63ce;
   --accent-line:rgba(11,99,206,.28);
   --bad:#c22a30; --bad-soft:rgba(194,42,48,.09);
+  --warn:#9a6206; --warn-soft:rgba(196,138,20,.12); --warn-line:rgba(196,138,20,.4);
   --shadow:0 1px 2px rgba(15,21,28,.05), 0 4px 16px -6px rgba(15,21,28,.10);
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg:#0a0e13; --surface:#121821; --ink:#e8eef6; --ink-2:#b9c6d6; --dim:#7d8b9d;
+    --bg:#0a0e13; --surface:#121821; --surface-2:#171e29; --ink:#e8eef6; --ink-2:#b9c6d6; --dim:#7d8b9d;
     --line:#1e2733; --line-2:#2b3745; --accent:#5aa2ff;
     --accent-line:rgba(90,162,255,.32);
     --bad:#ff6b6b; --bad-soft:rgba(255,107,107,.12);
+    --warn:#e0a233; --warn-soft:rgba(224,162,51,.13); --warn-line:rgba(224,162,51,.36);
     --shadow:0 1px 2px rgba(0,0,0,.4), 0 4px 16px -6px rgba(0,0,0,.5);
   }
 }
@@ -32,7 +34,7 @@ body {
   font-size:15px; line-height:1.6; -webkit-font-smoothing:antialiased;
 }
 .card {
-  width:100%; max-width:370px; background:var(--surface);
+  width:100%; max-width:388px; background:var(--surface);
   border:1px solid var(--line); border-radius:14px; padding:1.75rem;
   box-shadow:var(--shadow);
 }
@@ -45,15 +47,45 @@ body {
 }
 .mark svg { display:block; }
 h1 { font-size:1.05rem; margin:0; letter-spacing:-.01em; font-weight:650; }
-p.note { color:var(--dim); font-size:.87rem; margin:0 0 1.25rem; }
+
+/* Four panels, one shown at a time. Which one is decided by data-mode on the
+   card, so the server can render a failed sign-up straight back into the
+   sign-up panel — and the whole page still works with scripting turned off. */
+.tabs {
+  display:flex; gap:.25rem; background:var(--surface-2); border:1px solid var(--line);
+  border-radius:10px; padding:.22rem; margin-bottom:1.15rem;
+}
+.tabs a {
+  flex:1; text-align:center; padding:.38rem .5rem; border-radius:8px;
+  font-size:.85rem; font-weight:600; color:var(--dim); text-decoration:none;
+}
+.card[data-mode="signin"] .tabs a[href="/"],
+.card[data-mode="signup"] .tabs a[href="/signup"] {
+  background:var(--surface); color:var(--ink); box-shadow:var(--shadow);
+}
+/* The tab strip is for the two ways in. Recovery is a detour off sign-in, not
+   a third destination, so it hides the strip rather than adding to it. */
+.card[data-mode="forgot"] .tabs,
+.card[data-mode="reset"] .tabs { display:none; }
+.card:not([data-mode="signin"]) #panel-signin,
+.card:not([data-mode="signup"]) #panel-signup,
+.card:not([data-mode="forgot"]) #panel-forgot,
+.card:not([data-mode="reset"]) #panel-reset { display:none; }
+/* No mailer, no recovery — an offer that leads to "we cannot help" is worse
+   than no offer. */
+.card[data-mail="off"] .forgot { display:none; }
+
+p.note { color:var(--dim); font-size:.87rem; margin:0 0 1.2rem; }
 label { display:block; font-size:.8rem; font-weight:600; color:var(--ink-2); margin-bottom:.35rem; }
+.field { margin-bottom:.85rem; }
 input {
   width:100%; padding:.6rem .7rem; border:1px solid var(--line-2); border-radius:9px;
   background:var(--bg); color:var(--ink); font:inherit; font-size:.95rem;
 }
 input:focus { outline:2px solid var(--accent); outline-offset:-1px; border-color:transparent; }
+.hint { color:var(--dim); font-size:.78rem; margin:.35rem 0 0; }
 button {
-  width:100%; margin-top:.85rem; padding:.6rem 1rem; border:0; border-radius:9px;
+  width:100%; margin-top:.35rem; padding:.6rem 1rem; border:0; border-radius:9px;
   background:var(--accent); color:#fff; font:inherit; font-weight:600; cursor:pointer;
 }
 button:hover { filter:brightness(1.08); }
@@ -61,10 +93,32 @@ button:hover { filter:brightness(1.08); }
   background:var(--bad-soft); border:1px solid var(--bad); color:var(--ink);
   border-radius:9px; padding:.6rem .8rem; font-size:.87rem; margin-bottom:1rem;
 }
+.notice {
+  background:var(--warn-soft); border:1px solid var(--warn-line); color:var(--ink);
+  border-radius:9px; padding:.6rem .8rem; font-size:.83rem; margin-bottom:1rem;
+}
+.notice code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:.9em;
+}
+.foot { color:var(--dim); font-size:.78rem; margin:1.1rem 0 0; text-align:center; }
+.linkrow { display:flex; justify-content:space-between; margin-top:.7rem; font-size:.82rem; }
+.linkrow a { color:var(--accent); text-decoration:none; }
+.linkrow a:hover { text-decoration:underline; }
 </style>
 </head>
 <body>
-  <div class="card">
+  <!-- These two are rewritten server-side, and the values here are real
+       defaults rather than placeholders: this file must render a working
+       sign-in form on its own. A placeholder would match none of the panel
+       rules below, so anything that served the page without substituting --
+       an older process reading this newer file, say -- would show a blank
+       card instead of a form.
+
+       The server anchors its replacement on this whole opening tag, a string
+       that appears nowhere in the stylesheet. Anchoring on the bare
+       data-mode attribute would rewrite the CSS selectors too, and both forms
+       would render at once. -->
+  <div class="card" data-mode="signin" data-mail="on">
     <div class="brand">
       <div class="mark" aria-hidden="true">
         <svg viewBox="0 0 64 64" width="20" height="20">
@@ -73,14 +127,82 @@ button:hover { filter:brightness(1.08); }
       </div>
       <h1>Medical Guideline Assistant</h1>
     </div>
-    <p class="note">This instance is private. Enter the access password to continue.</p>
+
+    <div class="tabs">
+      <a href="/">Sign in</a>
+      <a href="/signup">Create account</a>
+    </div>
+
+    <!--NOTICE-->
     <!--ERROR-->
-    <form method="post" action="login">
-      <label for="password">Password</label>
-      <input id="password" name="password" type="password" autocomplete="current-password"
-             autofocus required>
-      <button type="submit">Sign in</button>
-    </form>
+
+    <div id="panel-signin">
+      <p class="note">Sign in to ask questions. Your history is saved to your account.</p>
+      <form method="post" action="/login">
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" autocomplete="username"
+                 value="<!--EMAIL-->" autofocus required>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password"
+                 autocomplete="current-password" required>
+        </div>
+        <button type="submit">Sign in</button>
+      </form>
+      <div class="linkrow">
+        <span class="forgot"><a href="/forgot">Forgot your password?</a></span>
+      </div>
+    </div>
+
+    <div id="panel-signup">
+      <p class="note">Create an account. Every question you ask is saved under it, and only you can read it.</p>
+      <form method="post" action="/signup">
+        <div class="field">
+          <label for="su-email">Email</label>
+          <input id="su-email" name="email" type="email" autocomplete="username"
+                 value="<!--EMAIL-->" required>
+        </div>
+        <div class="field">
+          <label for="su-password">Password</label>
+          <input id="su-password" name="password" type="password"
+                 autocomplete="new-password" minlength="8" required>
+          <p class="hint">At least 8 characters.</p>
+        </div>
+        <button type="submit">Create account</button>
+      </form>
+    </div>
+
+    <div id="panel-forgot">
+      <p class="note">Enter your email and we will send a link to choose a new password.</p>
+      <form method="post" action="/forgot">
+        <div class="field">
+          <label for="fg-email">Email</label>
+          <input id="fg-email" name="email" type="email" autocomplete="username"
+                 value="<!--EMAIL-->" required>
+        </div>
+        <button type="submit">Send reset link</button>
+      </form>
+      <div class="linkrow"><a href="/">Back to sign in</a></div>
+    </div>
+
+    <div id="panel-reset">
+      <p class="note">Choose a new password. This signs the account out everywhere else.</p>
+      <form method="post" action="/reset">
+        <input type="hidden" name="token" value="<!--TOKEN-->">
+        <div class="field">
+          <label for="rs-password">New password</label>
+          <input id="rs-password" name="password" type="password"
+                 autocomplete="new-password" minlength="8" required>
+          <p class="hint">At least 8 characters.</p>
+        </div>
+        <button type="submit">Set new password</button>
+      </form>
+      <div class="linkrow"><a href="/">Back to sign in</a></div>
+    </div>
+
+    <p class="foot">Guideline information only — never personal medical advice.</p>
   </div>
 </body>
 </html>

@@ -67,17 +67,96 @@ class Settings(BaseSettings):
     # staleness costs nothing -- `hyde_version` is what invalidates it.
     cache_hyde_ttl_s: int = 7 * 24 * 3600
 
+    # --- Accounts (Postgres / Supabase) ----------------------------------
+    # The durable store for users and their history. Any Postgres URL works --
+    # Supabase, Neon, or your own. Empty falls back to a local SQLite file,
+    # which is right for tests and local work and wrong for a deployment: see
+    # db.py. Setting this is also what turns the login gate on.
+    database_url: str = ""
+    # Where the SQLite fallback lives. Empty picks data/app.db, or the temp
+    # directory when that is not writable.
+    sqlite_path: str = ""
+    # Postgres only. Small on purpose: a serverless deployment multiplies this
+    # by the number of warm instances, and Supabase's pooler counts them all.
+    db_max_connections: int = 4
+    db_timeout_s: float = 10.0
+
     # --- Access control --------------------------------------------------
-    # Empty disables the gate entirely, which is the default: local work and
-    # the test suite must not need a password. Setting it turns on the login
-    # page and locks every /api route.
+    # None means "on when a database is configured", which is what you want in
+    # both directions: a deployment with DATABASE_URL requires accounts, and a
+    # fresh clone with nothing set stays open so the test suite and local work
+    # need no credentials. Set it explicitly to override either way.
+    auth_enabled: bool | None = None
+    # Signs the session cookie. MUST be set for a real deployment: with no
+    # value the app generates a random one per process, so sessions do not
+    # survive a restart and do not work across instances. That fails visibly
+    # (everyone is logged out) rather than silently accepting forged cookies,
+    # which is the only acceptable behaviour for an unset signing key.
+    session_secret: str = ""
+    # Deprecated. This was the shared password before accounts existed; it is
+    # no longer a credential. It is still read for one reason: an existing
+    # private deployment that upgrades without setting DATABASE_URL must not
+    # silently become public, so its presence keeps the gate on.
     app_password: str = ""
     # How long a successful login stays valid.
     session_ttl_s: int = 7 * 24 * 3600
-    # Questions per IP per window. 0 disables. This is a spend control, not a
-    # security boundary -- the password is the boundary.
-    rate_limit_per_window: int = 30
+    # Questions per window. Counted per account once signed in, and per IP
+    # before that. 0 disables. This is a spend control, not a security
+    # boundary -- signup is open, so anyone stopped by it can register again;
+    # the real backstop is a hard monthly limit on a project-scoped OpenAI key.
+    #
+    # Five is deliberately tight. Each question can cost an intent
+    # classification, an embedding, a HyDE generation, up to 40 rerank calls,
+    # an answer and two output-gate checks, so the bill is per question rather
+    # than per session. A limit low enough to be felt is the point: raise it
+    # for a deployment with known users, lower it for a public demo.
+    rate_limit_per_window: int = 5
     rate_limit_window_s: int = 3600
+
+    # scrypt work factors. n is the memory/CPU dial and must be a power of two;
+    # 2**14 with r=8 costs about 16 MB and tens of milliseconds per login,
+    # which is the usual balance between "expensive to crack" and "a login
+    # still feels instant". Raise n as hardware improves: stored hashes carry
+    # the parameters they were made with, so old passwords keep verifying.
+    scrypt_n: int = 2**14
+    scrypt_r: int = 8
+    scrypt_p: int = 1
+
+    # Turns kept per user; the oldest are dropped on write. 0 keeps everything.
+    history_max_items: int = 200
+
+    # --- Email (Amazon SES, over SMTP) -----------------------------------
+    # Configuring a host is what turns email verification on. Leave it unset
+    # and accounts are usable the moment they are created -- which is what a
+    # fresh clone, the test suite and offline work need, and is the same
+    # pattern as DATABASE_URL turning accounts on and REDIS_URL turning the
+    # shared cache on. Nothing here is ever required to answer a question.
+    ses_smtp_host: str = ""
+    # 587 with STARTTLS is SES's usual port. 465 is implicit TLS; the mailer
+    # picks the right handshake from the port rather than needing a flag.
+    ses_smtp_port: int = 587
+    ses_smtp_user: str = ""
+    ses_smtp_password: str = ""
+    # The envelope sender. Must be an address or domain you have verified in
+    # SES, or every send is rejected.
+    mail_from: str = ""
+    mail_from_name: str = "Medical Guideline Assistant"
+    # Sending happens inside the request, so this is a latency budget as well
+    # as a timeout: signup waits for it.
+    mail_timeout_s: float = 10.0
+
+    # Absolute base for links in emails. Derived from the request when empty,
+    # which is right locally and behind a well-behaved proxy; set it explicitly
+    # if anything rewrites Host, because a verification link pointing at the
+    # wrong origin is a dead account.
+    public_base_url: str = ""
+
+    # How long a verification link stays good. Long: someone who signs up on
+    # their phone and opens the mail the next morning should still get in.
+    verify_token_ttl_s: int = 3 * 24 * 3600
+    # How long a password-reset link stays good. Short by comparison -- it is a
+    # credential sitting in an inbox, and it is single-use besides.
+    reset_token_ttl_s: int = 3600
     # Vercel sets x-forwarded-for; a client can forge it when nothing sits in
     # front of the app, so this is off unless the deployment really is proxied.
     trust_proxy_header: bool = True
@@ -133,6 +212,33 @@ class Settings(BaseSettings):
     # user holding a cached refusal until the TTL expires -- which is exactly
     # the case a fix is urgent for.
     guardrails_version: str = "v3"
+
+    @property
+    def mail_enabled(self) -> bool:
+        """Whether this instance can send email at all.
+
+        Everything email-gated keys off this, verification included. An
+        instance that cannot send must not demand that people click a link it
+        will never deliver -- that is not a stricter deployment, it is a
+        deployment nobody can use.
+        """
+        return bool(self.ses_smtp_host and self.mail_from)
+
+    @property
+    def verification_required(self) -> bool:
+        return self.mail_enabled
+
+    @property
+    def auth_required(self) -> bool:
+        """Whether visitors must sign in.
+
+        `app_password` counts even though it is no longer accepted as a
+        credential: it means someone deliberately made this instance private,
+        and an upgrade must not undo that decision on their behalf.
+        """
+        if self.auth_enabled is not None:
+            return self.auth_enabled
+        return bool(self.database_url or self.app_password)
 
     @property
     def table(self) -> str:

@@ -15,6 +15,9 @@ data/raw/*
 data/lancedb/
 .env
 data/embed_cache/
+# The SQLite fallback for accounts and history. Real deployments use Postgres;
+# this file is local state, and it holds password hashes.
+data/app.db
 
 # Source PDFs (168MB) - kept out of git; data/raw/ symlinks point here
 pdf-data/

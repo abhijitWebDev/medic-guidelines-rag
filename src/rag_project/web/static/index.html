@@ -49,6 +49,11 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
+/* The browser hides [hidden] with `display:none` from its own stylesheet,
+   which any author rule setting `display` outranks -- so an element styled
+   `display:flex` ignores the attribute entirely and shows regardless of what
+   the JS sets. Everything toggled by `el.hidden` here depends on this rule. */
+[hidden] { display: none !important; }
 body {
   margin:0; background:var(--bg); color:var(--ink);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -86,6 +91,75 @@ h1 { font-size:1.42rem; letter-spacing:-.02em; margin:0; font-weight:650; }
   font:inherit; font-size:.78rem; cursor:pointer;
 }
 .signout:hover { border-color:var(--accent-line); color:var(--accent-ink); }
+/* The sign-out form is the flex item, so the button's own margin cannot push
+   it; the identity chip before it takes the free space instead. */
+.who {
+  margin-left:auto; align-self:flex-start; padding-top:.4rem;
+  color:var(--dim); font-size:.78rem; white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis; max-width:22ch;
+}
+#signout { align-self:flex-start; margin-left:.55rem; }
+
+/* --- history ----------------------------------------------------------- */
+.hist-empty { color:var(--dim); font-size:.86rem; padding:.15rem 0 .4rem; }
+ul.hist { list-style:none; margin:.2rem 0 0; padding:0; }
+ul.hist li { display:flex; align-items:stretch; gap:.4rem; border-top:1px solid var(--line); }
+ul.hist li:first-child { border-top:0; }
+.hist-open {
+  flex:1; min-width:0; text-align:left; background:none; border:0;
+  padding:.5rem .1rem; font:inherit; font-size:.86rem; color:var(--ink-2);
+  cursor:pointer; line-height:1.45; border-radius:6px;
+}
+.hist-open:hover { color:var(--accent-ink); }
+/* Two lines maximum: a history list is for recognising a question, not for
+   re-reading it. The full text is one click away. */
+.hist-q {
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+.hist-meta { display:block; color:var(--dim); font-size:.75rem; margin-top:.15rem; }
+.hist-refused { color:var(--warn); }
+.hist-del {
+  flex:none; align-self:center; background:none; border:0; color:var(--dim);
+  cursor:pointer; font-size:1.05rem; line-height:1; padding:.3rem .35rem;
+  border-radius:6px;
+}
+.hist-del:hover { color:var(--bad); background:var(--bad-soft); }
+.hist-foot { display:flex; justify-content:flex-end; margin-top:.55rem; }
+.hist-clear {
+  background:none; border:1px solid var(--line); border-radius:999px;
+  color:var(--dim); font:inherit; font-size:.78rem; padding:.22rem .7rem; cursor:pointer;
+}
+.hist-clear:hover, .hist-clear.armed { border-color:var(--bad); color:var(--bad); }
+
+/* --- unverified banner -------------------------------------------------- */
+.verify {
+  display:flex; gap:.7rem; align-items:flex-start; margin-bottom:1.4rem;
+  background:var(--warn-soft); border:1px solid var(--warn-line);
+  border-radius:var(--radius); padding:.85rem 1rem; font-size:.88rem;
+}
+.verify b { display:block; margin-bottom:.15rem; }
+.verify .body { flex:1; }
+.verify-actions { display:flex; gap:.5rem; align-items:center; margin-top:.55rem; }
+.verify button {
+  border:1px solid var(--warn-line); background:var(--surface); color:var(--ink-2);
+  border-radius:999px; padding:.28rem .8rem; font:inherit; font-size:.8rem; cursor:pointer;
+}
+.verify button:hover:not(:disabled) { border-color:var(--accent-line); color:var(--accent-ink); }
+.verify button:disabled { opacity:.55; cursor:default; }
+.verify-said { color:var(--ink-2); font-size:.82rem; }
+
+/* --- quota -------------------------------------------------------------- */
+.quota { color:var(--dim); font-size:.78rem; white-space:nowrap; }
+.quota.low { color:var(--warn); }
+.quota.out { color:var(--bad); }
+/* A quota is a budget, not a fault. It gets the warning treatment the refusal
+   panel uses, never the red "Request failed" box, which reads as a bug. */
+.limited {
+  background:var(--warn-soft); border:1px solid var(--warn-line); color:var(--ink);
+  padding:.9rem 1rem; border-radius:var(--radius-sm);
+  display:flex; gap:.6rem; align-items:flex-start;
+}
 
 /* --- corpus ------------------------------------------------------------ */
 details.corpus {
@@ -305,6 +379,7 @@ button.primary.busy .spinner { display:block; animation:spin .7s linear infinite
         </svg>
       </div>
       <h1>Medical Guideline Assistant</h1>
+      <span class="who" id="who"></span>
       <form method="post" action="logout" id="signout" hidden>
         <button class="signout" type="submit">Sign out</button>
       </form>
@@ -314,6 +389,26 @@ button.primary.busy .spinner { display:block; animation:spin .7s linear infinite
       Every claim is cited; unsupported questions are refused.
     </p>
   </header>
+
+  <div class="verify" id="verify" hidden>
+    <span aria-hidden="true">✉️</span>
+    <div class="body">
+      <b>Confirm your email to start asking questions.</b>
+      <span id="verify-text">We sent a link to your address. It is good for three days.</span>
+      <div class="verify-actions">
+        <button type="button" id="resend">Resend the link</button>
+        <span class="verify-said" id="verify-said"></span>
+      </div>
+    </div>
+  </div>
+
+  <details class="corpus" id="history" hidden>
+    <summary>
+      <span class="chev">▶</span> Your history
+      <span class="spacer" id="history-glance"></span>
+    </summary>
+    <div class="corpus-body" id="history-body">loading…</div>
+  </details>
 
   <details class="corpus" id="corpus">
     <summary>
@@ -328,6 +423,7 @@ button.primary.busy .spinner { display:block; animation:spin .7s linear infinite
       <textarea id="q" rows="3" aria-label="Your question"
         placeholder="What do the guidelines say about the diagnosis of tuberculosis?"></textarea>
       <div class="ask-foot">
+        <span class="quota" id="quota" hidden></span>
         <span class="kbd-hint"><span class="kbd">Ctrl</span> + <span class="kbd">↵</span> to ask</span>
         <button class="primary" id="submit" type="submit">
           <span class="spinner" aria-hidden="true"></span><span id="submit-label">Ask</span>
@@ -519,9 +615,13 @@ function renderAnswer(r, rid) {
 
 let seq = 0;
 
-function renderResult(r, elapsed, disclaimer) {
+// `meta` labels an answer that was not just produced -- a turn reopened from
+// history. renderPipeline already returns "" for a trace with no stages, which
+// is exactly what a stored turn has, so no branch is needed for the rail.
+function renderResult(r, elapsed, disclaimer, meta) {
   const rid = `r${++seq}`;
   return `<div class="result" id="${rid}"><div class="qtext">${esc(r.query)}</div>`
+    + (meta ? `<div class="reason">${esc(meta)}</div>` : "")
     + renderAnswer(r, rid) + renderSources(r.citations, rid)
     + renderPipeline(r.trace || {}, elapsed)
     + (disclaimer ? `<div class="disclaimer">⚠️ ${esc(disclaimer)}</div>` : "")
@@ -565,6 +665,176 @@ function renderCorpus(info) {
   return h;
 }
 
+// --- verification --------------------------------------------------------
+// Only asking is gated, so this disables the composer and nothing else: the
+// corpus panel and sign-out stay usable. An account you cannot look at is
+// harder to finish setting up, not safer.
+let verified = true;
+
+// Read from the markup rather than repeated here, so restoring it after
+// verification cannot drift from what the page actually shipped with.
+const PLACEHOLDER = $("q").placeholder;
+
+function applyVerification(info) {
+  verified = !info.verification_required || info.verified;
+  $("verify").hidden = verified;
+
+  // Both directions, every time. This runs again after a 403 and after
+  // verifying, so it has to restore the composer as well as disable it --
+  // otherwise confirming your address leaves the box greyed out until reload.
+  $("q").disabled = !verified;
+  $("submit").disabled = !verified || busy;
+  document.querySelectorAll(".examples button")
+    .forEach((b) => (b.disabled = !verified || busy));
+  $("q").placeholder = verified
+    ? PLACEHOLDER
+    : "Confirm your email address to ask questions.";
+
+  if (!verified && info.user) {
+    $("verify-text").textContent =
+      `We sent a link to ${info.user.email}. It is good for three days.`;
+  }
+}
+
+$("resend").addEventListener("click", async () => {
+  const btn = $("resend");
+  const said = $("verify-said");
+  btn.disabled = true;
+  said.textContent = "Sending…";
+  try {
+    const res = await fetch("api/resend-verification", { method: "POST" });
+    const body = await res.json().catch(() => ({}));
+    said.textContent = res.ok
+      ? (body.detail || "Sent. Check your inbox.")
+      : (body.detail || "Could not send it just now. Try again shortly.");
+  } catch {
+    said.textContent = "Could not send it just now. Try again shortly.";
+  } finally {
+    // Stays disabled briefly: the server meters this on its own counter, and a
+    // button that invites a second click into a 429 is worse than a slow one.
+    setTimeout(() => { btn.disabled = false; }, 15000);
+  }
+});
+
+// --- quota ---------------------------------------------------------------
+// The allowance is small enough to reach in ordinary use, so it is shown
+// before it bites rather than only when it does. `limit` comes from /api/info;
+// `remaining` from the X-RateLimit-* headers on every answer.
+let quota = { limit: null, remaining: null };
+
+function renderQuota() {
+  const el = $("quota");
+  if (quota.limit == null || quota.limit <= 0) { el.hidden = true; return; }
+  const left = quota.remaining == null ? quota.limit : quota.remaining;
+  el.hidden = false;
+  el.textContent = left === 0
+    ? `no questions left this hour`
+    : `${left} of ${quota.limit} question${quota.limit === 1 ? "" : "s"} left this hour`;
+  el.classList.toggle("low", left > 0 && left <= 2);
+  el.classList.toggle("out", left === 0);
+}
+
+function readQuota(res) {
+  const limit = Number(res.headers.get("X-RateLimit-Limit"));
+  const left = Number(res.headers.get("X-RateLimit-Remaining"));
+  // A header a proxy stripped reads as NaN; keep the last known value rather
+  // than blanking the chip on one odd response.
+  if (Number.isFinite(limit) && res.headers.get("X-RateLimit-Limit")) quota.limit = limit;
+  if (Number.isFinite(left) && res.headers.get("X-RateLimit-Remaining")) quota.remaining = left;
+  renderQuota();
+}
+
+// --- history -------------------------------------------------------------
+// Server-side, per account. The panel is hidden entirely on an instance with
+// no accounts (`history_enabled`), because there is nobody to file turns under.
+let historyEnabled = false;
+
+function when(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const today = new Date().toDateString() === d.toDateString();
+  return today
+    ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+function renderHistory(turns) {
+  $("history-glance").textContent = turns.length ? `${turns.length} saved` : "";
+  if (!turns.length) {
+    $("history-body").innerHTML =
+      `<div class="hist-empty">Nothing yet. Every question you ask is saved here, `
+      + `to your account only.</div>`;
+    return;
+  }
+  $("history-body").innerHTML = `<ul class="hist">` + turns.map((t) =>
+    `<li><button class="hist-open" data-id="${esc(t.id)}" title="${esc(t.query)}">`
+    + `<span class="hist-q">${esc(t.query)}</span>`
+    + `<span class="hist-meta">${esc(when(t.created_at))}`
+    + (t.answered ? "" : ` · <span class="hist-refused">refused</span>`)
+    + `</span></button>`
+    + `<button class="hist-del" data-id="${esc(t.id)}" title="Delete"`
+    + ` aria-label="Delete this question">×</button></li>`).join("")
+    + `</ul><div class="hist-foot">`
+    + `<button class="hist-clear" id="hist-clear">Clear history</button></div>`;
+}
+
+async function loadHistory() {
+  if (!historyEnabled) return;
+  try {
+    const res = await fetch("api/history?limit=20");
+    if (!res.ok) throw new Error(`${res.status}`);
+    renderHistory((await res.json()).turns || []);
+  } catch {
+    $("history-body").innerHTML = `<div class="hist-empty">History unavailable.</div>`;
+  }
+}
+
+async function openTurn(id) {
+  try {
+    const res = await fetch(`api/history/${encodeURIComponent(id)}`);
+    if (!res.ok) throw new Error(`${res.status}`);
+    const turn = await res.json();
+    $("empty").hidden = true;
+    // Stored turns carry no trace, so the pipeline rail is absent by
+    // construction -- the label says why, rather than leaving a reader to
+    // wonder which gate ran.
+    $("results").insertAdjacentHTML("afterbegin",
+      renderResult(turn, null, "", `from history · ${when(turn.created_at)}`));
+  } catch (err) {
+    $("results").insertAdjacentHTML("afterbegin",
+      `<div class="result"><div class="error">Could not open that answer: `
+      + `${esc(err.message)}</div></div>`);
+  }
+}
+
+$("history-body").addEventListener("click", async (e) => {
+  const open = e.target.closest(".hist-open");
+  if (open) return openTurn(open.dataset.id);
+
+  const del = e.target.closest(".hist-del");
+  if (del) {
+    await fetch(`api/history/${encodeURIComponent(del.dataset.id)}`, { method: "DELETE" });
+    return loadHistory();
+  }
+
+  // Two clicks rather than a confirm() dialog: a modal blocks the page, and
+  // this is a delete worth pausing over but not worth interrupting for.
+  const clear = e.target.closest(".hist-clear");
+  if (clear) {
+    if (!clear.classList.contains("armed")) {
+      clear.classList.add("armed");
+      clear.textContent = "Delete everything?";
+      setTimeout(() => {
+        clear.classList.remove("armed");
+        clear.textContent = "Clear history";
+      }, 4000);
+      return;
+    }
+    await fetch("api/history", { method: "DELETE" });
+    return loadHistory();
+  }
+});
+
 // --- wiring --------------------------------------------------------------
 let disclaimer = "";
 let busy = false;
@@ -572,10 +842,13 @@ let busy = false;
 function setBusy(state) {
   busy = state;
   const btn = $("submit");
-  btn.disabled = state;
+  // `|| !verified` matters on the way back down: finishing a request must not
+  // re-enable a composer that verification had disabled.
+  btn.disabled = state || !verified;
   btn.classList.toggle("busy", state);
   $("submit-label").textContent = state ? "Running…" : "Ask";
-  document.querySelectorAll(".examples button").forEach((b) => (b.disabled = state));
+  document.querySelectorAll(".examples button")
+    .forEach((b) => (b.disabled = state || !verified));
   $("live").innerHTML = state
     ? `<div class="loading"><div class="loading-label">Running the pipeline…</div>`
       + `<div class="bar"></div><div class="bar"></div><div class="bar"></div></div>`
@@ -583,7 +856,7 @@ function setBusy(state) {
 }
 
 async function ask(query) {
-  if (busy || !query.trim()) return;
+  if (busy || !verified || !query.trim()) return;
   setBusy(true);
   $("empty").hidden = true;
   const started = performance.now();
@@ -593,6 +866,29 @@ async function ask(query) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query: query.trim(), trace: true }),
     });
+    readQuota(res);
+    if (res.status === 403) {
+      // Unverified. Reached only if the account changed state in another tab,
+      // since the composer is disabled otherwise -- so re-read /api/info
+      // rather than guessing at what happened.
+      const body = await res.json().catch(() => ({}));
+      $("results").insertAdjacentHTML("afterbegin",
+        `<div class="result"><div class="qtext">${esc(query.trim())}</div>`
+        + `<div class="limited"><span>✉️</span><div>${esc(body.detail
+            || "Confirm your email address to ask questions.")}</div></div></div>`);
+      loadInfo();
+      return;
+    }
+    if (res.status === 429) {
+      // Not an error path. The request was well formed and the service is
+      // healthy; the answer is "not now", and it says when.
+      const body = await res.json().catch(() => ({}));
+      $("results").insertAdjacentHTML("afterbegin",
+        `<div class="result"><div class="qtext">${esc(query.trim())}</div>`
+        + `<div class="limited"><span>⏳</span><div>${esc(body.detail
+            || "You have used your questions for this hour.")}</div></div></div>`);
+      return;
+    }
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
     const data = await res.json();
     disclaimer = data.disclaimer || disclaimer;
@@ -601,6 +897,9 @@ async function ask(query) {
     $("results").querySelectorAll(".disclaimer").forEach((el) => el.remove());
     $("results").insertAdjacentHTML("afterbegin",
       renderResult(data, (performance.now() - started) / 1000, disclaimer));
+    // The server has just written this turn; re-read rather than guessing at
+    // what it stored.
+    loadHistory();
   } catch (err) {
     $("results").insertAdjacentHTML("afterbegin",
       `<div class="result"><div class="error">Request failed: ${esc(err.message)}</div></div>`);
@@ -644,14 +943,25 @@ document.querySelectorAll(".examples button").forEach((b, i) => {
   b.addEventListener("click", () => { $("q").value = EXAMPLES[i]; ask(EXAMPLES[i]); });
 });
 
-fetch("api/info")
-  .then((r) => r.json())
-  .then((info) => {
-    $("corpus-body").innerHTML = renderCorpus(info);
-    // Only offer sign-out where there is a session to end.
-    $("signout").hidden = !info.auth_enabled;
-  })
-  .catch(() => { $("corpus-body").textContent = "index information unavailable"; });
+function loadInfo() {
+  return fetch("api/info")
+    .then((r) => r.json())
+    .then((info) => {
+      $("corpus-body").innerHTML = renderCorpus(info);
+      // Only offer sign-out where there is a session to end.
+      $("signout").hidden = !info.auth_enabled;
+      if (info.user) $("who").textContent = info.user.email;
+      quota.limit = info.rate_limit;
+      renderQuota();
+      applyVerification(info);
+      historyEnabled = !!info.history_enabled;
+      $("history").hidden = !historyEnabled;
+      loadHistory();
+    })
+    .catch(() => { $("corpus-body").textContent = "index information unavailable"; });
+}
+
+loadInfo();
 </script>
 </body>
 </html>

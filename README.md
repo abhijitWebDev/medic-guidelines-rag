@@ -237,6 +237,10 @@ cp .env.example .env      # fill in OPENAI_API_KEY and the LANCEDB_* values
 uv sync
 ```
 
+For a deployment, also set `DATABASE_URL` (Postgres — Supabase, Neon, or your
+own) and `SESSION_SECRET`. Those two turn on accounts; see
+[Accounts and history](#accounts-and-history).
+
 ## Workflow
 
 ```bash
@@ -298,12 +302,237 @@ Two details the panel surfaces that the API alone does not make obvious:
 
 Hovering a `[C1]` marker lights the source it refers to; clicking scrolls to it.
 
+On an instance with accounts, a **Your history** panel sits above the corpus
+panel: the questions this account has asked, newest first, each reopenable with
+its original answer and sources, individually deletable, and clearable in two
+clicks. It is hidden entirely when there is no account to file turns under.
+
 Evaluation has no UI on purpose. A run costs real API calls and takes minutes,
 which is too easy to trigger by accident from a browser — use `rag eval run`.
 
 `corpus scan` leaves `url`, `specialty`, and `version` blank rather than
 guessing. Fill them in by hand — they end up in citations, and blank provenance
 is visible where invented provenance is not.
+
+## Accounts and history
+
+Set `DATABASE_URL` and the app has users. Visitors sign up with an email and a
+password, get a signed session cookie, and every question they ask is written to
+their own history — question, answer, refusal reason, and the citations that
+supported it. Leave it unset and the app behaves exactly as it did before: open,
+no login, no history.
+
+```bash
+# Neon: Dashboard → Connection Details → *Pooled connection*.
+DATABASE_URL='postgresql://USER:PASS@ep-xxx-pooler.REGION.aws.neon.tech/DB?sslmode=require'
+SESSION_SECRET=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+```
+
+Take the **pooled** host — the one with `-pooler` in it. The direct endpoint
+gives every serverless instance its own real Postgres connection and runs out;
+the pooled one is PgBouncer and is what a function-per-request deployment
+wants. Two settings in `db/engine.py` exist because of that pooler:
+`min_size=0`, so a cold start that never serves a request opens nothing, and
+`prepare_threshold=None`, which switches off psycopg's automatic server-side
+prepared statements. The second one matters: under transaction pooling a
+prepared statement can be looked up on a connection that never saw it, and that
+failure shows up in production under load and never in a test.
+
+Neon scales to zero, so the first query after an idle period pays a wake-up of
+a few hundred milliseconds — `DB_TIMEOUT_S` (10s) covers it comfortably.
+
+`SESSION_SECRET` is not optional in practice. Without it the app signs cookies
+with a random per-process key, which fails *visibly* — everyone is signed out at
+every restart, and two instances never agree on a session. That is deliberate:
+the alternative to a loud failure is a signing key an attacker can guess.
+
+**Schema.** Created on first use; there is no migration step, which is a
+choice rather than an omission — `CREATE TABLE IF NOT EXISTS` is idempotent and
+cannot drift from the code because it *is* the code. The day a column has to
+change type or be backfilled, `db/schema.py` grows a versioned migration list;
+adding one before then is machinery guarding nothing.
+
+```
+users(id, email UNIQUE, password_hash, created_at,
+      verified_at, password_changed_at)
+history(id, user_id → users.id, query, answer, answered,
+        refusal_reason, top_score, citations, created_at)
+```
+
+Columns added after the fact go in `db/schema.py`'s `MIGRATIONS` list, applied
+in order on connection. Two rules keep that honest: never edit a statement that
+has shipped (a deployed database has already run it, so editing only changes
+what a *fresh* one gets), and make backfills conditional on the column actually
+being new — the list runs on every cold start, so an unconditional
+`UPDATE users SET verified_at = ...` would verify every account that had signed
+up since.
+
+**How it is layered.** One concern per file, so that a change has one home:
+
+```
+db/schema.py     DDL                    what the tables are
+db/models.py     User, Turn             what a row means — no SQL
+db/engine.py     connections + pooling  how we talk to either backend
+db/users.py      queries on users       account lookup, creation, deletion
+db/history.py    queries on history     save, page, delete turns
+passwords.py     scrypt                 outside db/ — hashing is not storage
+```
+
+Callers never reach past the package door:
+
+```python
+from .db import StorageError, User, history, users
+
+user = users.authenticate(email, password)
+history.save(user.id, response)
+```
+
+`User` deliberately has no `password_hash` field. The hash is read inside
+`users.authenticate` and never leaves it, so no route, log line, or template
+can hand one to a browser by accident.
+
+Records are frozen dataclasses rather than Pydantic models, unlike `models.py`
+at the top level. That file describes the pipeline's wire format, where
+validation and schema generation earn their keep; these describe rows this
+application wrote and already validated. No ORM either — there are two tables
+and eleven statements, and every one of them is visible in the file that owns
+it.
+
+**Passwords** are hashed with `hashlib.scrypt` — memory-hard, and in the
+standard library, so authentication adds no dependency to keep patched. Each
+stored hash carries the cost parameters it was made with, so raising `SCRYPT_N`
+later re-hashes people as they sign in instead of locking them out.
+
+**A turn's trace is not stored.** It is debugging data about which gate fired
+and by far the largest part of a response. Citations *are* stored, because an
+answer without its sources is worth nothing in a system whose whole claim is
+that every statement is sourced — reopening a saved answer shows the same source
+cards it had when it was given.
+
+**Two stores, opposite failure modes.** This is the part worth understanding:
+
+|                | Redis (`cache.py`)            | Postgres (`db.py`)             |
+| -------------- | ----------------------------- | ------------------------------ |
+| Holds          | answers, embeddings, counters | users, history                 |
+| On failure     | compute it normally           | refuse (503)                   |
+| Keyed by       | pipeline fingerprint + query  | user id                        |
+| Shared?        | answers yes, sessions no      | never                          |
+
+Answers stay in a **shared** cache on purpose. The corpus is identical for every
+user, so two people asking the same guideline question should not both pay for
+the model; the keys are a fingerprint plus a hash of the question, and nothing
+user-authored goes in or comes out. What became per-user is everything that
+*identifies* someone: rate-limit counters, session lookups, and cached history
+pages. Rate limiting by account rather than by IP also fixes a real problem — a
+clinic behind one NAT used to share a single allowance.
+
+**Managing accounts:**
+
+```bash
+uv run rag users list                     # email, created, turns kept
+uv run rag users add doc@example.in       # prompts for a password
+uv run rag users delete doc@example.in    # account and all of its history
+```
+
+Sign-up is open: anyone who can reach the URL can create an account. Set
+`AUTH_ENABLED=false` to run the app open instead, or delete accounts you did not
+expect.
+
+**The quota is five questions per account per hour.** That is deliberately
+tight — a single question can cost an intent classification, an embedding, a
+HyDE generation, up to 40 rerank calls, an answer, and two output-gate checks,
+so the bill is per question rather than per session:
+
+```bash
+RATE_LIMIT_PER_WINDOW=5      # 0 disables; raise it for a deployment with known users
+RATE_LIMIT_WINDOW_S=3600
+```
+
+It is a spend control, not a security boundary. Signup is open, so someone
+stopped by it can register again; the real backstop is a hard monthly limit on a
+project-scoped OpenAI key, which no code here can undo. It also fails **open** —
+if Upstash is unreachable the request is served rather than refused, falling back
+to a weaker per-process counter (see `cache.py` on why a limiter must never be
+able to take the app down).
+
+Because five is small enough to reach in ordinary use, the limit is stated
+rather than sprung. Every answer carries `X-RateLimit-Limit`, `-Remaining` and
+`-Reset`; the UI shows "3 of 5 questions left this hour" beside the Ask button
+and turns amber, then red, as it runs down. Reaching it renders as a timed
+notice naming the limit and the wait — not as the red "Request failed" box,
+which reads as a bug. Sign-in and sign-up are metered separately and by IP, so
+failed logins never eat the question quota.
+
+**Testing.** The suite runs against SQLite with a fresh file per test, so it
+needs no server. Both backends share every statement, but only Postgres proves
+the dialect translation and type mapping, so the same tests can be pointed at a
+throwaway database:
+
+```bash
+TEST_DATABASE_URL=postgresql://postgres@127.0.0.1:5432/ragtest uv run pytest
+```
+
+## Email: verification and password reset
+
+Set `SES_SMTP_HOST` and `MAIL_FROM` and the app sends email through Amazon SES.
+That single fact turns on two flows:
+
+```bash
+# SES console → SMTP settings → Create SMTP credentials.
+# These are NOT your AWS access keys; SES derives a separate pair.
+SES_SMTP_HOST=email-smtp.ap-south-1.amazonaws.com
+SES_SMTP_PORT=587                       # 587 STARTTLS, 465 implicit TLS
+SES_SMTP_USER=AKIA...
+SES_SMTP_PASSWORD=...
+MAIL_FROM=noreply@yourdomain.in         # must be verified in SES
+PUBLIC_BASE_URL=https://your-app.vercel.app
+```
+
+> **A new SES account is in the sandbox**, where it delivers only to addresses
+> you have verified in the console. Until you request production access,
+> signing up with any other address gets a clean "we could not send it" and a
+> resend button — not a mystery. Request production access before letting real
+> people register.
+
+**Verification gates asking, and nothing else.** An unverified account can sign
+in, see the corpus, and read its (empty) history; `/api/ask` returns 403 with a
+resend button. That is the point of it — a throwaway account now costs a working
+inbox before it can spend a single model call, which is the hole the per-account
+quota could not close on its own. Everything else stays open, because an account
+nobody can look at is harder to finish setting up, not safer. The check runs
+*before* the rate limiter, so a blocked question never spends a slot.
+
+**Leaving email unconfigured disables verification entirely.** An instance that
+cannot send must not demand a link it will never deliver — that is not a
+stricter deployment, it is one nobody can sign into. Same pattern as
+`DATABASE_URL` turning accounts on and `REDIS_URL` turning the shared cache on.
+
+**Password reset** closes a gap that accounts opened: before it, a forgotten
+password meant the account was gone. `/forgot` answers identically whether or
+not the address is registered, so the form is not an enumeration endpoint.
+
+Both links are signed with `SESSION_SECRET` and stored nowhere. Three
+properties fall out of that rather than needing a token table:
+
+- **A confirmation link cannot reset a password.** The purpose is inside the
+  signature, and confirmation links go to addresses nobody has proven yet.
+- **A reset link works once.** Using it stamps `password_changed_at`, and a
+  token issued before that stamp no longer resolves.
+- **A reset signs the account out everywhere.** Sessions carry their issue time,
+  and anything older than the password change stops being honoured — which is
+  what someone resetting because they think they were compromised is asking
+  for. The session created *by* the reset survives, which is why both times are
+  compared in milliseconds rather than seconds.
+
+**No SDK.** `mailer.py` is `smtplib` and `ssl` from the standard library, about
+forty lines. boto3 would ship the service catalogue for every AWS API — tens of
+megabytes in a bundle with a size limit — to make one `SendEmail` call. Same
+trade as scrypt over argon2, and the hand-written LanceDB client.
+
+Sending happens **inside** the request rather than in a background task: a
+serverless instance can be frozen the moment it responds, and "send it after we
+reply" is a good way to lose the email an account depends on. Signup pays a few
+hundred milliseconds for it.
 
 ## Corpus governance
 
@@ -316,6 +545,13 @@ embedding model produced the table currently being queried — so "which version
 of the guidelines did this answer come from?" has an auditable answer.
 
 ## Deployment notes
+
+**Vercel.** Set `OPENAI_API_KEY`, the `LANCEDB_*` values, `DATABASE_URL` and
+`SESSION_SECRET` as project environment variables. Point `DATABASE_URL` at
+Supabase's *pooler* (port 6543), not the direct connection: a serverless
+function instance per request will exhaust direct connection slots. Without
+`DATABASE_URL` the app falls back to SQLite on a filesystem that is thrown away
+at every cold start, and the sign-in page says so.
 
 The configured LanceDB endpoint is a **custom REST wrapper**, not LanceDB
 Cloud/Enterprise, so the `lancedb` Python client cannot talk to it. Consequences:
@@ -343,6 +579,15 @@ src/rag_project/
   guardrails/        policy + the three gates
   evaluation/        eval set, runner, threshold calibration
   cache.py           read-through Redis cache; never fails closed
+  passwords.py       scrypt hashing — not a database concern, so not in db/
+  mailer.py          SES over SMTP; stdlib only, no AWS SDK
+  security.py        signed cookies + email link tokens + rate limiting
+  db/                accounts + history. Always fails closed.
+    schema.py        the DDL; the only place a column is described
+    models.py        User and Turn — shape, no SQL
+    engine.py        connections, pooling, the Postgres/SQLite seam
+    users.py         every query against `users`
+    history.py       every query against `history`
   api.py             FastAPI service + the web UI it serves
   web/static/        the single-page UI (no build step, no CDN)
 app.py               Vercel ASGI entry point (root level)

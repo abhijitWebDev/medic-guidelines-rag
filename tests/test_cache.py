@@ -5,6 +5,8 @@ an unreachable Upstash changes nothing, and that an outage is never persisted.
 
 from __future__ import annotations
 
+import time
+
 import numpy as np
 import pytest
 
@@ -286,3 +288,46 @@ def test_degradations_do_not_leak_between_queries(monkeypatch):
     good = StubAssistant()
     good.ask("second query")
     assert len(fake.store) == 1
+
+
+# --- the local tier is not allowed to outlive its value ------------------
+
+
+def test_local_entries_expire():
+    """Without this a value lives until LRU pressure evicts it, which on a
+    quiet instance is never -- so a key another instance deleted stays
+    readable here indefinitely."""
+    from rag_project.cache import Cache
+
+    c = Cache(url="")  # no Redis: the local tier is all there is
+    c.set_json("k", {"v": 1}, ttl_s=60)
+    assert c.get_json("k") == {"v": 1}
+
+    # Reach past the clock rather than sleeping through a real TTL.
+    value, _ = c._local["k"]
+    c._local["k"] = (value, time.monotonic() - 1)
+    assert c.get_json("k") is None
+    assert "k" not in c._local, "an expired entry was left behind"
+
+
+def test_local_ttl_is_capped_below_the_redis_ttl():
+    """A month-long embedding TTL is a statement about Redis, where the key can
+    be seen and deleted -- not licence for one process to trust its own copy
+    for a month."""
+    from rag_project.cache import _LOCAL_TTL_CAP_S, Cache
+
+    c = Cache(url="")
+    c.set_json("k", {"v": 1}, ttl_s=30 * 24 * 3600)
+    _value, expires_at = c._local["k"]
+    assert expires_at - time.monotonic() <= _LOCAL_TTL_CAP_S + 1
+
+
+def test_local_false_keeps_a_value_out_of_this_process():
+    """What account state uses, so that `forget` on another instance takes
+    effect here immediately rather than after an LRU eviction."""
+    from rag_project.cache import Cache
+
+    c = Cache(url="")
+    c.set_json("usr:abc", {"id": "abc"}, ttl_s=300, local=False)
+    assert "usr:abc" not in c._local
+    assert c.get_json("usr:abc", local=False) is None  # no Redis, so nowhere to read
