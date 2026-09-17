@@ -151,6 +151,47 @@ def test_numbers_present_in_the_source_pass():
     assert output_gate.check_numbers(ans, results) == []
 
 
+def test_thousands_separators_do_not_cause_a_false_flag():
+    """"10,000" in the answer and "10000" in the passage are one quantity.
+
+    Without canonicalising the separator these tokenise to {10, 0} and {10000},
+    and a correctly-grounded answer is refused.
+    """
+    results = [_retrieved("C1", "Prophylactic platelet transfusion below 10000 per cu.mm.")]
+    ans = GroundedAnswer(
+        answer="The guidelines set the prophylactic threshold at 10,000 per cu.mm [C1].",
+        claims=[Claim(text="threshold is 10,000", chunk_ids=["C1"])],
+    )
+    assert output_gate.check_numbers(ans, results) == []
+
+
+def test_indian_lakh_grouping_is_canonicalised_too():
+    results = [_retrieved("C1", "An annual incidence of 100000 cases was recorded.")]
+    ans = GroundedAnswer(
+        answer="The guidelines record an annual incidence of 1,00,000 cases [C1].",
+        claims=[Claim(text="incidence of 1,00,000", chunk_ids=["C1"])],
+    )
+    assert output_gate.check_numbers(ans, results) == []
+
+
+def test_an_enumeration_is_not_joined_into_a_number():
+    """The separator rule must not turn a list into a quantity."""
+    from rag_project.guardrails.output_gate import numbers_in
+
+    assert numbers_in("chunks 1,2 and 3") == {"1", "2", "3"}
+    assert numbers_in("1,2,3") == {"1", "2", "3"}
+
+
+def test_a_fabricated_number_is_still_caught_after_canonicalisation():
+    """The guard that matters: loosening comparison must not admit inventions."""
+    results = [_retrieved("C1", "Rifampicin is given at 10 mg/kg daily.")]
+    ans = GroundedAnswer(
+        answer="The guidelines give rifampicin at 10 mg/kg for 1,200 days [C1].",
+        claims=[Claim(text="rifampicin 10 mg/kg", chunk_ids=["C1"])],
+    )
+    assert "1200" in output_gate.check_numbers(ans, results)
+
+
 def test_citation_markers_are_not_mistaken_for_clinical_numbers():
     results = [_retrieved("C1", "Zinc is advised."), _retrieved("C2", "ORS is advised.")]
     ans = GroundedAnswer(
@@ -194,6 +235,68 @@ def test_repair_strips_unsupported_claim_and_its_sentence():
     assert "screening at every visit" in out.answer
     assert "two occasions" in out.answer
     assert len(out.claims) == 2
+
+
+def test_repair_drops_a_claim_whose_sentence_went_with_an_unsupported_one():
+    """Two claims in one sentence, one of them unsupported.
+
+    The sentence has to go, and the supported claim sharing it cannot be
+    reported either -- `claims` would name something `answer` no longer says.
+    """
+    from rag_project.guardrails.output_gate import repair
+
+    ans = GroundedAnswer(
+        answer=(
+            "The guidelines describe screening at every visit [C1]. "
+            "Rifampicin is dosed at 10 mg/kg daily and cures the disease in "
+            "three days [C2]. "
+            "Diagnosis requires readings on two occasions [C1]."
+        ),
+        claims=[
+            Claim(text="screening at every visit", chunk_ids=["C1"]),
+            Claim(text="rifampicin is dosed at 10 mg/kg daily", chunk_ids=["C2"]),
+            Claim(text="cures the disease in three days", chunk_ids=["C2"]),
+            Claim(text="diagnosis requires readings on two occasions", chunk_ids=["C1"]),
+        ],
+    )
+    out = repair(ans, ["cures the disease in three days"])
+    assert out is not None
+    assert "cures the disease" not in out.answer
+
+    texts = {c.text for c in out.claims}
+    # the co-located claim lost its sentence, so it goes too
+    assert "rifampicin is dosed at 10 mg/kg daily" not in texts
+    assert texts == {
+        "screening at every visit",
+        "diagnosis requires readings on two occasions",
+    }
+
+
+def test_repair_keeps_a_claim_it_cannot_place_in_either_half():
+    """A paraphrase the overlap measure matches nowhere is left alone.
+
+    Failing to locate a claim is not evidence that its sentence was removed,
+    and shedding claims on that basis would cost more than the inconsistency
+    it avoids.
+    """
+    from rag_project.guardrails.output_gate import repair
+
+    ans = GroundedAnswer(
+        answer=(
+            "Screening occurs at each visit [C1]. "
+            "The drug eliminates infection within a week [C2]. "
+            "Two separate readings are needed before diagnosis [C1]."
+        ),
+        claims=[
+            Claim(text="screening occurs at each visit", chunk_ids=["C1"]),
+            Claim(text="the drug eliminates infection within a week", chunk_ids=["C2"]),
+            Claim(text="monitoring happens regularly", chunk_ids=["C1"]),
+        ],
+    )
+    out = repair(ans, ["the drug eliminates infection within a week"])
+    assert out is not None
+    assert "eliminates infection" not in out.answer
+    assert "monitoring happens regularly" in {c.text for c in out.claims}
 
 
 def test_repair_gives_up_when_everything_is_unsupported():

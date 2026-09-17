@@ -105,11 +105,11 @@ svg { display:block; max-width:100%; }
   <p class="subtitle">A retrieval-augmented assistant that answers only from official
      MOHFW Standard Treatment Guidelines — and refuses when it cannot.</p>
   <div class="factbar">
-    <div class="fact"><b>20</b><span>documents</span></div>
-    <div class="fact"><b>3,414</b><span>chunks</span></div>
+    <div class="fact"><b>21</b><span>documents</span></div>
+    <div class="fact"><b>3,547</b><span>chunks</span></div>
     <div class="fact"><b>3</b><span>safety gates</span></div>
-    <div class="fact"><b>100</b><span>tests</span></div>
-    <div class="fact"><b>~5.5k</b><span>lines of python</span></div>
+    <div class="fact"><b>247</b><span>tests</span></div>
+    <div class="fact"><b>~6.8k</b><span>lines of python</span></div>
   </div>
 </div>
 
@@ -132,10 +132,14 @@ text against them before showing it. The same pipeline backs a CLI and a JSON AP
 </p>
 
 <p>
-The corpus is deliberately narrow: 20 documents, hash-verified against a manifest,
-covering tuberculosis, hypertension, malaria, antimicrobial use, critical care,
-paediatrics, obstetrics and related areas. Anything outside that is refused rather
-than answered from the model's own knowledge.
+The corpus is deliberately narrow: 21 documents, 1,907 pages, hash-verified against
+a manifest, spanning thirteen specialties — infectious disease, cardiology,
+respiratory, paediatrics, obstetrics and gynaecology, oncology, orthopaedics,
+neurology, surgery, critical care, toxicology, public health and AYUSH. Anything
+outside that is refused rather than answered from the model's own knowledge, and
+there is deliberately <em>no</em> fallback to the open web: an answer from an
+unpinned source would break the citations, the manifest and Gate 3's provenance
+check all at once.
 </p>
 
 <h3>Three questions the design keeps answering</h3>
@@ -147,7 +151,8 @@ than answered from the model's own knowledge.
   <tr><td><strong>Do we actually have the answer?</strong></td>
       <td>Gate&nbsp;2 reads an <em>absolute</em> relevance score, not a ranking.
           The best of five irrelevant passages still ranks first; only an absolute
-          score can express “nothing here answers this”.</td></tr>
+          score can express &ldquo;nothing here answers this&rdquo;. Its middle band
+          retries retrieval once before deciding.</td></tr>
   <tr><td><strong>Is the answer supported?</strong></td>
       <td>Gate&nbsp;3 re-reads the draft against the passages it cites, checking
           citations, numbers, claim support and framing before release.</td></tr>
@@ -156,79 +161,115 @@ than answered from the model's own knowledge.
 <h2>2. The pipeline</h2>
 
 <figure>
-<svg viewBox="0 0 720 300" width="720" height="300" font-family="Segoe UI, DejaVu Sans, sans-serif">
+<svg viewBox="0 0 720 524" width="720" height="524" font-family="Segoe UI, DejaVu Sans, sans-serif">
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
       <path d="M0 0 L10 5 L0 10 z" fill="#6b7885"/>
     </marker>
+    <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#c22a30"/>
+    </marker>
+    <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#137a3b"/>
+    </marker>
   </defs>
-  <!-- row 1 -->
-  <rect x="4" y="16" width="112" height="44" rx="7" fill="#eef4fd" stroke="#0b63ce" stroke-width="1.2"/>
-  <text x="60" y="35" font-size="11" font-weight="700" text-anchor="middle" fill="#15202b">Question</text>
-  <text x="60" y="49" font-size="8.5" text-anchor="middle" fill="#6b7885">browser / CLI / API</text>
 
-  <rect x="150" y="16" width="126" height="44" rx="7" fill="#fff" stroke="#c22a30" stroke-width="1.4"/>
-  <text x="213" y="34" font-size="10.5" font-weight="700" text-anchor="middle" fill="#c22a30">Gate 1 · intent</text>
-  <text x="213" y="48" font-size="8.5" text-anchor="middle" fill="#6b7885">rules, then model</text>
+  <rect x="4" y="10" width="400" height="38" rx="6" fill="#eef4fd" stroke="#0b63ce" stroke-width="1.2"/>
+  <text x="18" y="27" font-size="10.5" font-weight="700" fill="#15202b">Question</text>
+  <text x="18" y="40" font-size="8.2" fill="#6b7885">browser · CLI · JSON API</text>
 
-  <rect x="310" y="16" width="118" height="44" rx="7" fill="#fff" stroke="#c3cedb"/>
-  <text x="369" y="34" font-size="10.5" font-weight="700" text-anchor="middle" fill="#15202b">Retrieve</text>
-  <text x="369" y="48" font-size="8.5" text-anchor="middle" fill="#6b7885">dense + BM25 → RRF</text>
+  <rect x="4" y="56" width="400" height="38" rx="6" fill="#fff" stroke="#c22a30" stroke-width="1.4"/>
+  <text x="18" y="73" font-size="10.5" font-weight="700" fill="#c22a30">Gate 1 · intent</text>
+  <text x="18" y="86" font-size="8.2" fill="#6b7885">regex rules may escalate, never clear · then a model classifier</text>
 
-  <rect x="462" y="16" width="112" height="44" rx="7" fill="#fff" stroke="#c3cedb"/>
-  <text x="518" y="34" font-size="10.5" font-weight="700" text-anchor="middle" fill="#15202b">Rerank</text>
-  <text x="518" y="48" font-size="8.5" text-anchor="middle" fill="#6b7885">absolute 0–10</text>
+  <rect x="4" y="102" width="400" height="38" rx="6" fill="#fff" stroke="#c3cedb"/>
+  <text x="18" y="119" font-size="10.5" font-weight="700" fill="#15202b">Retrieve</text>
+  <text x="18" y="132" font-size="8.2" fill="#6b7885">rewrite → HyDE-blended vector (dense) + BM25 (local) → fused on rank</text>
 
-  <rect x="608" y="16" width="108" height="44" rx="7" fill="#fff" stroke="#c22a30" stroke-width="1.4"/>
-  <text x="662" y="34" font-size="10.5" font-weight="700" text-anchor="middle" fill="#c22a30">Gate 2</text>
-  <text x="662" y="48" font-size="8.5" text-anchor="middle" fill="#6b7885">confidence</text>
+  <rect x="4" y="148" width="400" height="38" rx="6" fill="#fff" stroke="#c3cedb"/>
+  <text x="18" y="165" font-size="10.5" font-weight="700" fill="#15202b">Rerank</text>
+  <text x="18" y="178" font-size="8.2" fill="#6b7885">absolute 0–10 per passage, scored independently — not a ranking</text>
 
-  <line x1="118" y1="38" x2="146" y2="38" stroke="#6b7885" marker-end="url(#a)"/>
-  <line x1="278" y1="38" x2="306" y2="38" stroke="#6b7885" marker-end="url(#a)"/>
-  <line x1="430" y1="38" x2="458" y2="38" stroke="#6b7885" marker-end="url(#a)"/>
-  <line x1="576" y1="38" x2="604" y2="38" stroke="#6b7885" marker-end="url(#a)"/>
+  <rect x="4" y="194" width="400" height="38" rx="6" fill="#fff" stroke="#c22a30" stroke-width="1.4"/>
+  <text x="18" y="211" font-size="10.5" font-weight="700" fill="#c22a30">Gate 2 · confidence</text>
+  <text x="18" y="224" font-size="8.2" fill="#6b7885">three-way: ≥ 5.5 proceed · 3.0–5.5 correct once · &lt; 3.0 refuse</text>
 
-  <!-- wrap down -->
-  <path d="M662 62 L662 88 L60 88 L60 112" fill="none" stroke="#6b7885" marker-end="url(#a)"/>
+  <rect x="24" y="240" width="380" height="38" rx="6" fill="#fdf6e7" stroke="#9a6206" stroke-dasharray="3 2"/>
+  <text x="38" y="257" font-size="10.5" font-weight="700" fill="#9a6206">Corrective retry</text>
+  <text x="38" y="270" font-size="8.2" fill="#6b7885">k 20→40, leans onto the hypothetical · union of both passes</text>
 
-  <!-- row 2 -->
-  <rect x="4" y="118" width="112" height="44" rx="7" fill="#fff" stroke="#c3cedb"/>
-  <text x="60" y="136" font-size="10.5" font-weight="700" text-anchor="middle" fill="#15202b">Generate</text>
-  <text x="60" y="150" font-size="8.5" text-anchor="middle" fill="#6b7885">structured claims</text>
+  <rect x="24" y="286" width="380" height="38" rx="6" fill="#fff" stroke="#c22a30" stroke-width="1.4"/>
+  <text x="38" y="303" font-size="10.5" font-weight="700" fill="#c22a30">Gate 2 · re-judge</text>
+  <text x="38" y="316" font-size="8.2" fill="#6b7885">same threshold, correction disabled — one retry, by construction</text>
 
-  <rect x="150" y="118" width="126" height="44" rx="7" fill="#fff" stroke="#c22a30" stroke-width="1.4"/>
-  <text x="213" y="136" font-size="10.5" font-weight="700" text-anchor="middle" fill="#c22a30">Gate 3 · output</text>
-  <text x="213" y="150" font-size="8.5" text-anchor="middle" fill="#6b7885">verify vs. sources</text>
+  <rect x="4" y="332" width="400" height="38" rx="6" fill="#fff" stroke="#c3cedb"/>
+  <text x="18" y="349" font-size="10.5" font-weight="700" fill="#15202b">Generate</text>
+  <text x="18" y="362" font-size="8.2" fill="#6b7885">structured GroundedAnswer: prose + claims[] carrying chunk_ids</text>
 
-  <rect x="310" y="118" width="118" height="44" rx="7" fill="#e4f4e9" stroke="#137a3b" stroke-width="1.2"/>
-  <text x="369" y="136" font-size="10.5" font-weight="700" text-anchor="middle" fill="#137a3b">Answer</text>
-  <text x="369" y="150" font-size="8.5" text-anchor="middle" fill="#6b7885">+ citations + trace</text>
+  <rect x="4" y="378" width="400" height="38" rx="6" fill="#fff" stroke="#c22a30" stroke-width="1.4"/>
+  <text x="18" y="395" font-size="10.5" font-weight="700" fill="#c22a30">Gate 3 · output</text>
+  <text x="18" y="408" font-size="8.2" fill="#6b7885">citations → numbers → claim support → framing · may strip and keep</text>
 
-  <line x1="118" y1="140" x2="146" y2="140" stroke="#6b7885" marker-end="url(#a)"/>
-  <line x1="278" y1="140" x2="306" y2="140" stroke="#6b7885" marker-end="url(#a)"/>
+  <rect x="4" y="424" width="400" height="38" rx="6" fill="#e4f4e9" stroke="#137a3b" stroke-width="1.2"/>
+  <text x="18" y="441" font-size="10.5" font-weight="700" fill="#137a3b">Answer</text>
+  <text x="18" y="454" font-size="8.2" fill="#6b7885">+ citations + disclaimer + trace</text>
 
-  <!-- refusal rail -->
-  <rect x="462" y="112" width="254" height="56" rx="7" fill="#fdeaea" stroke="#c22a30" stroke-dasharray="3 2"/>
-  <text x="589" y="132" font-size="10" font-weight="700" text-anchor="middle" fill="#c22a30">Refusal (HTTP 200)</text>
-  <text x="589" y="146" font-size="8.2" text-anchor="middle" fill="#6b7885">standard message + refusal_reason</text>
-  <text x="589" y="158" font-size="8.2" text-anchor="middle" fill="#6b7885">any gate can end the request here</text>
+  <line x1="204" y1="48" x2="204" y2="54" stroke="#6b7885" marker-end="url(#a)"/>
+  <line x1="204" y1="94" x2="204" y2="100" stroke="#6b7885" marker-end="url(#a)"/>
+  <line x1="204" y1="140" x2="204" y2="146" stroke="#6b7885" marker-end="url(#a)"/>
+  <line x1="204" y1="186" x2="204" y2="192" stroke="#6b7885" marker-end="url(#a)"/>
+  <line x1="204" y1="232" x2="204" y2="238" stroke="#9a6206" marker-end="url(#a)"/>
+  <line x1="204" y1="278" x2="204" y2="284" stroke="#6b7885" marker-end="url(#a)"/>
+  <line x1="204" y1="324" x2="204" y2="330" stroke="#6b7885" marker-end="url(#a)"/>
+  <line x1="204" y1="370" x2="204" y2="376" stroke="#6b7885" marker-end="url(#a)"/>
+  <line x1="204" y1="416" x2="204" y2="422" stroke="#6b7885" marker-end="url(#a)"/>
 
-  <path d="M213 62 L213 78 L520 78 L520 108" fill="none" stroke="#c22a30" stroke-dasharray="3 2" marker-end="url(#a)"/>
-  <path d="M662 62 L698 62 L698 108" fill="none" stroke="#c22a30" stroke-dasharray="3 2" marker-end="url(#a)"/>
-  <path d="M213 164 L213 190 L580 190 L580 172" fill="none" stroke="#c22a30" stroke-dasharray="3 2" marker-end="url(#a)"/>
+  <path d="M12 232 L12 330" fill="none" stroke="#137a3b" stroke-width="1.1" stroke-dasharray="2 2" marker-end="url(#g)"/>
 
-  <!-- caching -->
-  <rect x="4" y="212" width="712" height="52" rx="7" fill="#f5f8fb" stroke="#c3cedb"/>
-  <text x="18" y="231" font-size="9.5" font-weight="700" fill="#15202b">Cache (Upstash Redis)</text>
-  <text x="18" y="246" font-size="8.4" fill="#6b7885">L0 query embeddings · L1 whole responses, keyed by a pipeline fingerprint · read-through, never fails closed</text>
-  <text x="18" y="258" font-size="8.4" fill="#6b7885">A fail-closed refusal is never cached: an outage must not be pinned into Redis for the whole TTL.</text>
+  <rect x="440" y="56" width="276" height="360" rx="6" fill="#fdeaea" stroke="#c22a30" stroke-dasharray="3 2"/>
+  <text x="456" y="78" font-size="10.5" font-weight="700" fill="#c22a30">Refusal (HTTP 200)</text>
+  <text x="456" y="93" font-size="8.2" fill="#6b7885">standard message + refusal_reason</text>
+  <text x="456" y="106" font-size="8.2" fill="#6b7885">any gate can end the request here</text>
+
+  <text x="456" y="134" font-size="8.4" font-weight="700" fill="#3f4c5a">Gate 1</text>
+  <text x="456" y="146" font-size="8.2" fill="#6b7885">emergency · personalized advice</text>
+  <text x="456" y="158" font-size="8.2" fill="#6b7885">out of domain — no retrieval runs</text>
+
+  <text x="456" y="184" font-size="8.4" font-weight="700" fill="#3f4c5a">Gate 2</text>
+  <text x="456" y="196" font-size="8.2" fill="#6b7885">low confidence — the corpus</text>
+  <text x="456" y="208" font-size="8.2" fill="#6b7885">does not answer this</text>
+
+  <text x="456" y="234" font-size="8.4" font-weight="700" fill="#3f4c5a">Gate 2 · re-judge</text>
+  <text x="456" y="246" font-size="8.2" fill="#6b7885">still below after one retry</text>
+
+  <text x="456" y="272" font-size="8.4" font-weight="700" fill="#3f4c5a">Gate 3</text>
+  <text x="456" y="284" font-size="8.2" fill="#6b7885">invalid citation · untraceable</text>
+  <text x="456" y="296" font-size="8.2" fill="#6b7885">number · unsupported claim</text>
+  <text x="456" y="308" font-size="8.2" fill="#6b7885">· unsafe framing</text>
+
+  <text x="456" y="340" font-size="8.2" font-style="italic" fill="#3f4c5a">No path returns raw model text,</text>
+  <text x="456" y="352" font-size="8.2" font-style="italic" fill="#3f4c5a">and no path skips a gate.</text>
+  <text x="456" y="372" font-size="8.2" fill="#6b7885">A model outage refuses here too —</text>
+  <text x="456" y="384" font-size="8.2" fill="#6b7885">five of six call sites fail closed</text>
+  <text x="456" y="396" font-size="8.2" fill="#6b7885">(§ 10), and that refusal is never</text>
+  <text x="456" y="408" font-size="8.2" fill="#6b7885">written to the cache.</text>
+
+  <line x1="406" y1="75" x2="436" y2="75" stroke="#c22a30" stroke-dasharray="3 2" marker-end="url(#r)"/>
+  <line x1="406" y1="219" x2="436" y2="219" stroke="#c22a30" stroke-dasharray="3 2" marker-end="url(#r)"/>
+  <line x1="406" y1="305" x2="436" y2="305" stroke="#c22a30" stroke-dasharray="3 2" marker-end="url(#r)"/>
+  <line x1="406" y1="397" x2="436" y2="397" stroke="#c22a30" stroke-dasharray="3 2" marker-end="url(#r)"/>
+
+  <rect x="4" y="478" width="712" height="42" rx="6" fill="#f5f8fb" stroke="#c3cedb"/>
+  <text x="18" y="496" font-size="9.5" font-weight="700" fill="#15202b">Cache (Upstash Redis)</text>
+  <text x="18" y="511" font-size="8.2" fill="#6b7885">L0 query embeddings 30 d · HyDE passages 7 d · L1 whole responses 24 h, keyed by pipeline fingerprint · read-through, never fails closed</text>
 </svg>
-<figcaption>Every exit produces the same <code>Response</code> object. A refusal is a
+<figcaption>The two dashed rows are conditional: the green rail on the left is the path a
+question takes when Gate&nbsp;2 clears the bar outright, skipping the corrective pass
+entirely. Every exit produces the same <code>Response</code> object. A refusal is a
 200 with <code>answered: false</code>, never an HTTP error — refusing is a correct
 outcome, and a 4xx would invite callers to retry around it.</figcaption>
 </figure>
-
-<h2>3. Repository structure</h2>
+<h2 class="break">3. Repository structure</h2>
 
 <pre class="tree">Rag-project/
 ├── app.py                      Vercel ASGI entrypoint — puts src/ on the path, re-exports the app
@@ -241,15 +282,24 @@ outcome, and a 4xx would invite callers to retry around it.</figcaption>
 │   ├── models.py               shared schemas — Chunk, Retrieved, Claim, Response
 │   ├── llm.py                  OpenAI wrapper; failures raise, callers decide
 │   ├── cache.py                two-tier read-through cache over Upstash
-│   ├── security.py             password gate (fails closed) + rate limit (fails open)
+│   ├── security.py             sessions, link tokens, rate limiting
+│   ├── passwords.py            scrypt hashing; parameters travel inside the hash
+│   ├── mailer.py               outbound email over Amazon SES's SMTP interface
 │   ├── assistant.py            the pipeline, end to end
-│   ├── api.py                  FastAPI service and the web UI it serves
+│   ├── api.py                  FastAPI service, auth routes, and the web UI it serves
 │   ├── cli.py                  `rag` — corpus, ingest, index, ask, eval, store
+│   │
+│   ├── db/                     Postgres persistence (accounts and history)
+│   │   ├── engine.py           pooled psycopg connection, ? → %s placeholder rewriting
+│   │   ├── schema.py           tables, created idempotently on first use
+│   │   ├── models.py           User and Turn row mappings
+│   │   ├── users.py            create, authenticate, verify, set_password
+│   │   └── history.py          per-user turn log, paginated
 │   │
 │   ├── corpus/manifest.py      sha256 document allow-list
 │   ├── ingest/                 PDF → sections → chunks
 │   │   ├── parse.py            layout-aware PDF parsing (pymupdf, imported lazily)
-│   │   ├── text.py             plain-text source handling
+│   │   ├── text.py             plain-text source handling (the OCR'd dengue transcript)
 │   │   ├── chunk.py            section-aware chunking, 320 tokens / 48 overlap
 │   │   └── pipeline.py         orchestration + load_chunks() used at query time
 │   ├── indexing/
@@ -259,30 +309,35 @@ outcome, and a 4xx would invite callers to retry around it.</figcaption>
 │   │   └── build.py            embeds chunks and pushes the table
 │   ├── retrieval/
 │   │   ├── rewrite.py          curated abbreviation glossary; expansions are additive
+│   │   ├── hyde.py             hypothetical passage, blended into the query vector
 │   │   ├── search.py           hybrid dense + lexical retrieval, fused on rank
-│   │   └── rerank.py           absolute 0–10 relevance scoring
+│   │   ├── rerank.py           absolute 0–10 relevance scoring
+│   │   └── corrective.py       one wider, HyDE-weighted retry before refusing
 │   ├── generation/
 │   │   ├── prompt.py           the grounded-answer system prompt
 │   │   └── generate.py         structured generation into GroundedAnswer
 │   ├── guardrails/
 │   │   ├── policy.py           scope statement, disclaimer, refusal messages
 │   │   ├── input_gate.py       Gate 1 — intent classification
-│   │   ├── confidence.py       Gate 2 — absolute-score threshold
+│   │   ├── confidence.py       Gate 2 — absolute-score threshold, three-way
 │   │   └── output_gate.py      Gate 3 — citations, numbers, support, framing
 │   ├── evaluation/             eval set, runner, threshold calibration
 │   └── web/static/
 │       ├── index.html          the single-page UI (no build step, no CDN)
-│       └── login.html          password gate page
+│       └── login.html          sign in, sign up, forgot and reset pages
 │
 ├── data/
 │   ├── corpus_manifest.yaml    the allow-list: a PDF not listed here is never ingested
 │   ├── chunks/*.jsonl          committed — BM25 reads these at boot
 │   ├── calibration.json        committed — the measured gate-2 threshold
 │   ├── index_manifest.json     committed — what produced the table being queried
+│   ├── raw/dengue.txt          committed — OCR transcript, sha256-pinned like a source
+│   ├── eval/questions.yaml     the 34 labelled cases
 │   ├── embed_cache/            89 MB, gitignored, ingest only
 │   └── raw/                    source PDFs, gitignored
 │
-└── tests/                      100 tests across 7 files</pre>
+├── tools/ocr_outlined_pdf.py   regenerates dengue.txt from the outlined PDF
+└── tests/                      247 tests across 12 files</pre>
 
 <h3>Why some data files are committed</h3>
 <p>
@@ -291,25 +346,34 @@ outcome, and a 4xx would invite callers to retry around it.</figcaption>
 hybrid search reads the chunks at boot, so a deployment without them raises
 <code>RetrievalError</code> and refuses every question. The calibration file
 carries the gate-2 threshold that was actually measured (5.5) rather than the
-provisional default in code (5.0). Together they are 4.6 MB. The 89 MB embed
-cache is <em>not</em> committed — it is ingest infrastructure and never touched
-on the query path.
+provisional default in code (5.0). <code>data/raw/dengue.txt</code> is committed
+for a different reason: it is a <em>derived</em> source, so the manifest pins a
+sha256 of the transcript and <code>tools/ocr_outlined_pdf.py</code> — the thing
+that derives it — is committed beside it. The 89 MB embed cache is <em>not</em>
+committed; it is ingest infrastructure and never touched on the query path.
 </p>
 
 <h2>4. Module reference</h2>
 
 <table>
   <tr><th style="width:30%">Module</th><th style="width:9%">Lines</th><th>Responsibility</th></tr>
-  <tr><td class="k">config.py</td><td class="n">159</td><td>Single source of tunables. Also computes <code>pipeline_fingerprint</code>, which namespaces the response cache so a reindex or recalibration makes old entries unreachable rather than stale.</td></tr>
-  <tr><td class="k">models.py</td><td class="n">113</td><td>Contracts shared by every stage. <code>Claim.chunk_ids</code> has <code>min_length=1</code>, so the schema itself forbids an uncited claim.</td></tr>
-  <tr><td class="k">llm.py</td><td class="n">103</td><td>One place for model choice, retries, and failure policy. An LLM error raises; it never degrades into “answer anyway”. Also records <em>degradations</em> so a fail-closed refusal is distinguishable from a considered one.</td></tr>
-  <tr><td class="k">assistant.py</td><td class="n">187</td><td>The pipeline. <code>ask()</code> wraps caching around <code>_run()</code>, which walks the six stages and builds the trace.</td></tr>
-  <tr><td class="k">cache.py</td><td class="n">221</td><td>Bounded in-process LRU in front of Upstash, short timeouts, circuit breaker after 3 consecutive failures.</td></tr>
-  <tr><td class="k">security.py</td><td class="n">153</td><td>HMAC session cookies keyed off the password itself, plus per-IP rate limiting on separate counters for asking and logging in.</td></tr>
-  <tr><td class="k">api.py</td><td class="n">214</td><td>FastAPI app: serves the UI at <code>/</code>, the API under <code>/api/*</code>, login/logout, and an unauthenticated <code>/health</code>.</td></tr>
-  <tr><td class="k">ingest/parse.py</td><td class="n">316</td><td>Layout-aware PDF parsing — heading detection by font size with a rescue rule for headings typeset at body size, plus running-header removal.</td></tr>
+  <tr><td class="k">api.py</td><td class="n">719</td><td>FastAPI app: the UI at <code>/</code>, the API under <code>/api/*</code>, the auth routes (sign in, sign up, verify, forgot, reset), history, and an unauthenticated <code>/health</code>.</td></tr>
+  <tr><td class="k">config.py</td><td class="n">327</td><td>Single source of tunables. Also computes <code>pipeline_fingerprint</code>, which namespaces the response cache so a reindex or recalibration makes old entries unreachable rather than stale.</td></tr>
   <tr><td class="k">guardrails/output_gate.py</td><td class="n">329</td><td>The largest guardrail: citation validity, unsupported numbers, claim-level support judging, and framing checks, with partial repair.</td></tr>
+  <tr><td class="k">ingest/parse.py</td><td class="n">316</td><td>Layout-aware PDF parsing — heading detection by font size with a rescue rule for headings typeset at body size, plus running-header removal.</td></tr>
+  <tr><td class="k">cache.py</td><td class="n">276</td><td>Bounded in-process LRU in front of Upstash, short timeouts, circuit breaker after 3 consecutive failures.</td></tr>
+  <tr><td class="k">security.py</td><td class="n">273</td><td>HMAC session cookies and single-purpose link tokens, plus rate limiting metered per account where there is one and per IP otherwise.</td></tr>
+  <tr><td class="k">db/engine.py</td><td class="n">260</td><td>Pooled Postgres access. Rewrites <code>?</code> placeholders to <code>%s</code> so query strings stay driver-agnostic, and creates the schema idempotently.</td></tr>
+  <tr><td class="k">assistant.py</td><td class="n">213</td><td>The pipeline. <code>ask()</code> wraps caching around <code>_run()</code>, which walks the gates and builds the trace.</td></tr>
+  <tr><td class="k">db/users.py</td><td class="n">198</td><td>Account lifecycle. <code>authenticate()</code> is the only function that reads <code>password_hash</code>, and it does not put it on the <code>User</code> it returns.</td></tr>
+  <tr><td class="k">retrieval/hyde.py</td><td class="n">187</td><td>Generates a hypothetical answer and blends its embedding into the query vector. Falls back to the plain query vector when the model is unavailable.</td></tr>
+  <tr><td class="k">db/history.py</td><td class="n">157</td><td>Per-user turn log. A failed write marks the trace and is swallowed — history is a convenience, the answer on screen is the product.</td></tr>
+  <tr><td class="k">mailer.py</td><td class="n">123</td><td>SES over SMTP via <code>smtplib</code>, so no AWS SDK enters the bundle. Configuring a host is what turns verification on.</td></tr>
+  <tr><td class="k">models.py</td><td class="n">127</td><td>Contracts shared by every stage. <code>Claim.chunk_ids</code> has <code>min_length=1</code>, so the schema itself forbids an uncited claim.</td></tr>
+  <tr><td class="k">retrieval/corrective.py</td><td class="n">111</td><td>CRAG's corrective action, aimed at the same corpus. Merges both passes and reranks only what the first pass never scored.</td></tr>
+  <tr><td class="k">llm.py</td><td class="n">103</td><td>One place for model choice, retries, and failure policy. An LLM error raises; it never degrades into &ldquo;answer anyway&rdquo;. Also records <em>degradations</em> so a fail-closed refusal is distinguishable from a considered one.</td></tr>
   <tr><td class="k">retrieval/rewrite.py</td><td class="n">94</td><td>Hand-curated abbreviation glossary. Expansions are additive and ambiguous abbreviations are deliberately left alone.</td></tr>
+  <tr><td class="k">passwords.py</td><td class="n">83</td><td><code>hashlib.scrypt</code> — stdlib, so no wheel. The stored hash carries its own parameters, so raising the cost re-hashes people as they sign in.</td></tr>
 </table>
 
 <h2>5. Request flow, end to end</h2>
@@ -317,8 +381,9 @@ on the query path.
 <h3>5.1 A refused question</h3>
 <pre>POST /api/ask   {"query": "Should I take rifampicin for my cough?"}
 
-  api.require_auth          session cookie valid (or no password configured)
-  api.enforce_rate_limit    INCR rl:ask:&lt;window&gt;:&lt;hash(ip)&gt;   → within quota
+  require_auth              signed-in, or accounts not enabled
+  require_verified          address confirmed, or verification not required
+  enforce_rate_limit        INCR rl:ask:&lt;window&gt;:&lt;hash(user|ip)&gt;  → within quota
   Assistant.ask             cache miss → _run()
     input_gate.classify     regex "\bshould i\b" matches
                             → Intent.PERSONALIZED_ADVICE
@@ -330,41 +395,69 @@ on the query path.
 Rules run first and may only ever <em>escalate</em> to a refusal — they are never
 allowed to stamp a query in-scope. If they could, any phrasing the regexes failed
 to anticipate would bypass the model check entirely, which is how a blocklist
-quietly becomes an allowlist.
+quietly becomes an allowlist. The dependency order matters too: verification is
+checked before the limiter, so a question that was never going to run does not
+spend a slot from the allowance.
 </p>
 
 <h3>5.2 An answered question</h3>
 <pre>POST /api/ask   {"query": "What does the guideline say about TB treatment duration?"}
 
   Assistant.ask             cache key = sha256(casefolded query, screen) under fingerprint
-    ├ HIT  → return stored Response, trace.cache = "hit"        ~107 ms
-    └ MISS → _run()                                             ~10 s
+    ├ HIT  → return stored Response, trace.cache = "hit"
+    └ MISS → _run()
 
     Gate 1  input_gate      no rule match → model classifies → IN_SCOPE
     Retrieve  search.py     rewrite: "TB" → "TB tuberculosis"   (additive)
-                            dense:   embed query → LanceDB top-20
-                            lexical: BM25 over 3,414 local chunks → top-20
-                            fuse:    reciprocal rank fusion → 34 candidates
+                            hyde:    generate a hypothetical passage, embed it,
+                                     blend 0.5 query + 0.5 hypothetical (unit vectors)
+                            dense:   HyDE vector → LanceDB top-20
+                            lexical: BM25 over 3,547 local chunks → top-20
+                            fuse:    reciprocal rank fusion, on rank not score
     Rerank  rerank.py       one batched call scores each passage 0–10, absolutely
-    Gate 2  confidence      top score 9.0 ≥ threshold 5.5 → keep 6, label C1…C6
+    Gate 2  confidence      top score 9.0 ≥ threshold 5.5 → PROCEED, keep 6 as C1…C6
     Generate  generate.py   structured GroundedAnswer: prose + claims + chunk_ids
-    Gate 3  output_gate     citations valid? numbers present in cited text?
+    Gate 3  output_gate     citations valid? every digit present in cited text?
                             each claim supported? framing third-person?
                             → strips 1 unsupported claim, passes the rest
 
   Response(answered=True, citations=[C1…C6], trace={...})
-  → cached for 24 h, unless any stage was degraded</pre>
+  → cached, unless any stage recorded a degradation
+  → history.save(user.id, response)   failure marks the trace, never the answer</pre>
 
-<h3>5.3 What the browser does with it</h3>
+<h3>5.3 A question that takes the corrective band</h3>
+<pre>    Rerank  rerank.py       best passage scores 4.0
+    Gate 2  confidence      4.0 &lt; 5.5 but ≥ 3.0  → ConfidenceAction.CORRECT
+
+    corrective.correct()    retrieve again: k=40 (ranks 21–40 were never scored),
+                            hyde_query_weight 0.5 → 0.2 (the literal query has
+                            already demonstrably failed)
+                            merge: union of both passes, first pass wins on ties
+                            rerank: only the passages carrying no score yet
+
+    Gate 2  re-judge        evaluate(..., allow_correction=False)
+                            → same 5.5 threshold, and no third attempt exists
+
+  trace["corrective"] = {"ran": true, "k": 40, "new_candidates": 17,
+                         "top_before": 4.0, "top_after": 7.0, "improved": true}</pre>
+<p class="small muted">
+A corrective pass buys a second attempt at the bar, never a lower bar. Everything
+else about it is an optimisation; that is the invariant. It is also the one place
+in the system with a <strong>known, measured leak</strong> — see § 12.
+</p>
+
+<h3>5.4 What the browser does with it</h3>
 <p>
 The UI requests <code>trace: true</code> and renders a <strong>pipeline panel</strong>
 under every answer showing what each stage decided. That panel is the reason the
 UI exists: a chat box shows you an answer, but it cannot show you that a question
-was refused <em>before retrieval ran</em>, or that the reranker scored every
-passage zero. Hovering a <code>[C1]</code> marker highlights the source it refers to.
+was refused <em>before retrieval ran</em>, that the reranker scored every passage
+zero, or that a corrective pass ran and did not help. Hovering a <code>[C1]</code>
+marker highlights the source it refers to. Signed-in users also get a history
+panel; it is hidden when there is no account, since there is then nobody to file
+a turn under.
 </p>
-
-<h2>6. Offline flow — corpus to index</h2>
+<h2 class="break">6. Offline flow — corpus to index</h2>
 <pre>rag corpus scan     inspect data/raw/, write candidate manifest entries
                     (url, specialty and version left blank rather than guessed)
 rag ingest          verify sha256 against corpus_manifest.yaml, then
@@ -381,6 +474,31 @@ rag eval run        full pipeline metrics: safety compliance, false-refusal rate
   quietly widening what the assistant will speak about.
 </div>
 
+<h3>The one document that could not be parsed</h3>
+<p>
+<code>dengue.pdf</code> had zero extractable characters. It is not a scan: PrimoPDF
+exported it with every glyph flattened to vector outlines — 55 pages, no font
+objects, roughly 12,000 bezier paths per page, 145 MB. No text extractor can ever
+read it, so <code>parse_pdf</code> correctly refused it rather than emitting
+plausible garbage.
+</p>
+<p>
+The text was recovered by OCR instead, using only the <em>recogniser</em> half of
+the stack: because the pages are crisp synthetic renders rather than photographs,
+lines and word gaps are found by pixel projection, and the stock text detector —
+tuned for photographed pages — silently dropped about a fifth of the lines on
+every page. Mean recogniser confidence is 0.972. Page numbers survive as form
+feeds, so a citation reading &ldquo;p.34&rdquo; still opens the right page of the
+original PDF, which stays in <code>pdf-data/</code> as the citable source.
+</p>
+<p class="small muted">
+Residual artifacts are documented rather than corrected by hand: occasional split
+words on letter-spaced justified lines (<code>sweati ng</code>), <code>I</code>/<code>l</code>
+confusion in acronyms (<code>AlIMS</code> for <code>AIIMS</code>), and flowchart
+boxes whose columns interleave in their lower rows. Treat dengue citations as
+slightly noisier than the other twenty.
+</p>
+
 <h3>Threshold calibration</h3>
 <p>
 Gate 2's threshold is measured, not chosen. <code>rag eval calibrate</code> stops
@@ -389,19 +507,31 @@ generation and costs a fraction as much. It then sweeps candidate thresholds and
 takes the <em>midpoint of the widest maximum-accuracy band</em> rather than an
 edge, because rerank scores move slightly between runs and a threshold sitting
 exactly on an observed score flips that case on the next query. The measured
-value is 5.5, against answerable cases scoring 10.0 and unanswerable ones 0.0.
+value is <strong>5.5</strong>.
 </p>
+<div class="note warn">
+  <div class="t">A correction to an earlier claim</div>
+  This document previously stated that answerable cases score 10.0 and unanswerable
+  ones 0.0. That holds only for the <em>calibration</em> set, whose unanswerable
+  cases are whole specialties nobody ingested. Near-miss cases inside covered
+  specialties sit at <strong>4.0</strong> — squarely inside the corrective band —
+  and one of them reaches 7.0 after a corrective pass. The band is therefore
+  reached in practice, which is both why it exists and why § 12 lists it as an
+  open risk.
+</div>
 
 <h2>7. Caching</h2>
 
 <table>
-  <tr><th style="width:16%">Layer</th><th style="width:26%">Key</th><th style="width:10%">TTL</th><th>Purpose</th></tr>
+  <tr><th style="width:14%">Layer</th><th style="width:30%">Key</th><th style="width:9%">TTL</th><th>Purpose</th></tr>
   <tr><td><strong>L0</strong></td><td class="k">emb:sha256(model,dim,text)</td><td>30 d</td>
       <td>Query embeddings. Also removes an 89 MB npz rewrite from the hot path — the disk cache is now lazy and ingest-only.</td></tr>
+  <tr><td><strong>HyDE</strong></td><td class="k">hyde:sha256(model,version,n,query)</td><td>7 d</td>
+      <td>Hypothetical passages. Cached separately from the response because a query later refused by Gate 2 has already paid for this generation, and the passage is deterministic for a fixed (model, version, n, query).</td></tr>
   <tr><td><strong>L1</strong></td><td class="k">resp:&lt;fingerprint&gt;:sha256(query)</td><td>24 h</td>
-      <td>Whole responses. A hit skips all five model calls: ~10 s → ~107 ms.</td></tr>
-  <tr><td><strong>rate</strong></td><td class="k">rl:&lt;scope&gt;:&lt;window&gt;:hash(ip)</td><td>1 h</td>
-      <td>Per-IP counters, one <code>INCR</code>+<code>EXPIRE</code> pipeline per check.</td></tr>
+      <td>Whole responses. A hit skips every model call in the request — six of them on an answered question.</td></tr>
+  <tr><td><strong>rate</strong></td><td class="k">rl:&lt;scope&gt;:&lt;window&gt;:hash(subject)</td><td>1 h</td>
+      <td>Fixed-window counters, one <code>INCR</code>+<code>EXPIRE</code> pipeline per check. Subject is the account where there is one, the IP otherwise.</td></tr>
 </table>
 
 <h4>Two rules, inverted from the rest of the system</h4>
@@ -409,7 +539,7 @@ value is 5.5, against answerable cases scoring 10.0 and unanswerable ones 0.0.
   <li><strong>The cache never fails closed.</strong> Everything in <code>llm.py</code>
       refuses on error because every caller there is a safety gate. Nothing in the
       cache is. A miss, a timeout or an unreachable Upstash all degrade to
-      “compute it normally”.</li>
+      &ldquo;compute it normally&rdquo;.</li>
   <li><strong>The cache never adds latency.</strong> Upstash is a remote TLS hop of
       tens of milliseconds. Timeouts are short and retries are disabled — redis-py
       retries three times with backoff by default, which silently turned a 0.4 s
@@ -421,59 +551,147 @@ value is 5.5, against answerable cases scoring 10.0 and unanswerable ones 0.0.
   When a stage falls back because a model was unreachable, it records itself via
   <code>llm.note_degraded()</code>. <code>Assistant.ask</code> refuses to store any
   response carrying a degradation — otherwise a minute of API trouble becomes a
-  full day of a good question being refused from cache.
+  full day of a good question being refused from cache. The flag is stamped in one
+  place, after <code>_run()</code> returns, so a newly added early return cannot
+  forget it.
 </div>
 
-<h2>8. Access control</h2>
+<h2 class="break">8. Accounts and access control</h2>
+
+<p>
+Accounts replaced the earlier single shared password. <code>APP_PASSWORD</code> is
+<strong>no longer accepted as a credential</strong>; it is read only as a signal
+that someone deliberately made this instance private, so an upgrade does not open
+a closed deployment on its owner's behalf.
+</p>
 
 <table>
-  <tr><th style="width:22%">Control</th><th style="width:18%">Fails</th><th>Behaviour</th></tr>
-  <tr><td><strong>Password gate</strong><br><span class="small muted">APP_PASSWORD</span></td>
+  <tr><th style="width:21%">Control</th><th style="width:14%">Fails</th><th>Behaviour</th></tr>
+  <tr><td><strong>Accounts</strong><br><span class="small muted">DATABASE_URL</span></td>
       <td><span class="pill bad">closed</span></td>
-      <td>Unset by default, so local work and tests need nothing. When set, <code>/</code>
-          serves a login page and every <code>/api</code> route returns 401. Session is an
-          HMAC-signed cookie — <code>httponly</code>, <code>samesite=lax</code>, and
-          <code>secure</code> only over real HTTPS. The signing key derives from the
-          password, so rotating it logs everyone out.</td></tr>
+      <td>Sign-in is required when a database (or a legacy <code>APP_PASSWORD</code>) is
+          configured, unless <code>AUTH_ENABLED</code> overrides it. With accounts on and
+          no valid session, every <code>/api</code> route returns 401. Unset by default,
+          so local work and the test suite need nothing.</td></tr>
+  <tr><td><strong>Passwords</strong><br><span class="small muted">passwords.py</span></td>
+      <td><span class="pill bad">closed</span></td>
+      <td><code>hashlib.scrypt</code> — chosen because it is in the standard library, so
+          no wheel and no build step enter a serverless bundle. The stored hash carries
+          the parameters it was made with (<code>scrypt$n$r$p$salt$hash</code>), so raising
+          the cost later re-hashes people as they sign in rather than locking them out.</td></tr>
+  <tr><td><strong>Sessions</strong><br><span class="small muted">SESSION_TTL_S</span></td>
+      <td><span class="pill bad">closed</span></td>
+      <td>HMAC-signed cookie, 7-day default — <code>httponly</code>, <code>samesite=lax</code>,
+          and <code>secure</code> only over real HTTPS. A session issued <em>before</em>
+          the row's <code>password_changed_at</code> is not honoured, which is how a reset
+          signs out every other device without keeping a revocation list.</td></tr>
+  <tr><td><strong>Email verification</strong><br><span class="small muted">SES_SMTP_HOST, MAIL_FROM</span></td>
+      <td><span class="pill warn">off when unset</span></td>
+      <td>Configuring SES is what turns verification on — <code>verification_required</code>
+          reads <code>mail_enabled</code> rather than being its own switch, so an instance
+          with no SMTP host has no unverified state to manage. An unverified account may
+          sign in and resend, but <code>/api/ask</code> returns 403. Verify links last
+          3 days; clicking one signs the person in on the spot.</td></tr>
+  <tr><td><strong>Password reset</strong><br><span class="small muted">RESET_TOKEN_TTL_S</span></td>
+      <td><span class="pill bad">closed</span></td>
+      <td>One hour, single use. <code>set_password</code> stamps
+          <code>password_changed_at</code>, and a token issued before that stamp no longer
+          resolves — including the one that caused it. Reaching the mailbox also confirms
+          the address, so a reset marks an unverified account verified.</td></tr>
   <tr><td><strong>Rate limit</strong><br><span class="small muted">RATE_LIMIT_PER_WINDOW</span></td>
       <td><span class="pill ok">open</span></td>
-      <td>Per-IP fixed window, default 30/hour, IP hashed not stored. Falls back to a
-          per-process counter when Redis is unreachable. Asking and logging in use
-          <em>separate</em> counters, so failed logins never consume the question quota.</td></tr>
+      <td>Fixed window, default 5 per hour, subject hashed not stored. Falls back to a
+          per-process counter when Redis is unreachable. Five separate scopes —
+          <code>ask</code>, <code>login</code>, <code>signup</code>, <code>verify</code>,
+          <code>forgot</code>/<code>reset</code> — because asking costs money while guessing
+          a password is free, and one shared bucket would let a few failed logins eat the
+          day's questions.</td></tr>
   <tr><td><strong>Health check</strong></td><td>—</td>
-      <td><code>/health</code> stays open: uptime monitoring must not need a password,
+      <td><code>/health</code> stays open: uptime monitoring must not need an account,
           and it reveals nothing but liveness.</td></tr>
 </table>
 
-<p class="small muted">
-The API key itself is never exposed — it appears in no response model, trace field
-or log line, and all model calls are server-side. Neither control replaces a hard
-monthly spend limit on a project-scoped OpenAI key, which is the only backstop no
-application bug can undo.
-</p>
+<h3>Four details worth knowing</h3>
+<ul>
+  <li><strong>Link tokens are signed, never stored.</strong> The purpose string goes
+      <em>inside</em> the signature, so a verify token cannot be replayed as a reset
+      token. Nothing server-side has to be kept or expired.</li>
+  <li><strong>Metering moved from IP to account.</strong> An IP is shared by everyone
+      behind a clinic's NAT, so an IP quota either starves a whole building or is
+      generous enough to be no quota at all. Sign-up and sign-in stay on the IP, since
+      they are what you use <em>before</em> you have an identity to meter.</li>
+  <li><strong><code>/forgot</code> never reveals whether an address is registered</strong> —
+      and says the same thing when SES refuses the send, because a difference there
+      would become the oracle. On sign-in, <code>passwords.burn_time()</code> hashes a
+      throwaway value so an unknown address cannot answer faster than a wrong password.</li>
+  <li><strong><code>PUBLIC_BASE_URL</code> wins over the request <code>Host</code></strong>
+      when building a link. <code>Host</code> is attacker-controllable in general, and a
+      verification link is exactly the thing you do not want pointed somewhere else.</li>
+</ul>
 
 <h2>9. Deployment</h2>
 <table>
   <tr><th style="width:30%">Concern</th><th>Resolution</th></tr>
-  <tr><td>Runtime bundle</td><td>124 MB installed against Vercel's 250 MB limit. The PDF parser (64 MB) sits in the <code>ingest</code> extra and its import is lazy, so a deploy that only answers questions never loads it.</td></tr>
+  <tr><td>Runtime bundle</td><td>The PDF parser (64 MB) sits in the <code>ingest</code> extra and its import is lazy, so a deploy that only answers questions never loads it. Email uses <code>smtplib</code> against SES's SMTP interface rather than boto3, which keeps the AWS SDK out entirely; Postgres uses <code>psycopg[binary]</code>.</td></tr>
   <tr><td>Vector store</td><td>Self-hosted LanceDB reached over plain <code>httpx</code>, so the heavy client and its Arrow dependency never enter the bundle.</td></tr>
-  <tr><td>Cold start</td><td>~2.2 s to import and build the BM25 index over 3,414 chunks; 204 MB peak RSS against 1024 MB requested.</td></tr>
+  <tr><td>Database</td><td>Neon Postgres over the pooled connection string. The schema is created idempotently on first use, so there is no migration step to run before a deploy serves traffic.</td></tr>
   <tr><td>Entrypoint</td><td>Top-level <code>app.py</code>, which Vercel auto-detects; <code>src/</code> is added to <code>sys.path</code> so the import works whether or not the package was installed.</td></tr>
-  <tr><td>Required config</td><td><code>OPENAI_API_KEY</code>, <code>LANCEDB_URI</code>, <code>LANCEDB_API_KEY</code>, <code>REDIS_URL</code>. Everything else matches a code default.</td></tr>
+  <tr><td>Required config</td><td><code>OPENAI_API_KEY</code>, <code>LANCEDB_URI</code> (plus <code>LANCEDB_API_KEY</code> when remote), <code>REDIS_URL</code>. Optional: <code>DATABASE_URL</code> enables accounts and history; <code>SES_SMTP_HOST</code> + <code>MAIL_FROM</code> enable verification and password reset; <code>PUBLIC_BASE_URL</code> fixes the origin used in emailed links. Everything else matches a code default.</td></tr>
+</table>
+<p class="small muted">
+The bundle size, cold-start time and peak RSS previously quoted here were measured
+before the accounts, HyDE and corrective work landed. They have not been
+re-measured and are therefore omitted rather than restated — take fresh numbers
+before quoting any.
+</p>
+<h2>10. Behaviour when the model is unavailable</h2>
+
+<p>
+An answered question makes six model calls. Five of those call sites fail closed:
+an unreachable model must not mean &ldquo;assume safe&rdquo;.
+</p>
+
+<table>
+  <tr><th style="width:24%">Call site</th><th style="width:20%">On LLMError</th><th>Consequence</th></tr>
+  <tr><td class="k">intent_classifier</td><td><span class="pill bad">closed</span></td>
+      <td>Returns <code>OUT_OF_DOMAIN</code> with <code>matched_rule="fail-closed"</code>. An unavailable classifier cannot be read as permission.</td></tr>
+  <tr><td class="k">hyde</td><td><span class="pill warn">degrades</span></td>
+      <td>Falls back to the plain query vector. The only soft failure, because a weaker query is still a valid query over the same pinned corpus — and the lexical half is untouched.</td></tr>
+  <tr><td class="k">reranker</td><td><span class="pill bad">closed</span></td>
+      <td>Sets every score to <code>None</code>. Gate 2 then sees no confidence and refuses — and deliberately does <em>not</em> attempt a corrective pass, which would re-retrieve, fail to score again, and pay twice for the same answer.</td></tr>
+  <tr><td class="k">generator</td><td><span class="pill bad">closed</span></td>
+      <td>Returns <code>insufficient_context=True</code> rather than raising, and the caller turns that into the standard refusal.</td></tr>
+  <tr><td class="k">support_judge</td><td><span class="pill bad">closed</span></td>
+      <td>Treats every claim as unsupported. An unverifiable answer is not released.</td></tr>
+  <tr><td class="k">safety_classifier</td><td><span class="pill bad">closed</span></td>
+      <td>Raises a <code>safety classifier unavailable</code> flag, which fails Gate 3.</td></tr>
 </table>
 
-<h2>10. Testing</h2>
+<p class="small muted">
+Every one of these records itself through <code>llm.note_degraded()</code>, so
+<code>trace.degraded</code> names exactly which stage fell back — and the response
+is never written to the cache (§ 7). That distinction is the point: failing closed
+is easy, but caching a fail-closed refusal would turn a transient outage into a
+persistent one.
+</p>
+
+<h2>11. Testing</h2>
 <div class="grid2">
 <table>
   <tr><th>Suite</th><th class="n">Tests</th></tr>
-  <tr><td class="k">test_security.py</td><td class="n">22</td></tr>
-  <tr><td class="k">test_cache.py</td><td class="n">19</td></tr>
-  <tr><td class="k">test_guardrails.py</td><td class="n">16</td></tr>
+  <tr><td class="k">test_security.py</td><td class="n">50</td></tr>
+  <tr><td class="k">test_accounts.py</td><td class="n">40</td></tr>
+  <tr><td class="k">test_guardrails.py</td><td class="n">39</td></tr>
+  <tr><td class="k">test_email.py</td><td class="n">28</td></tr>
+  <tr><td class="k">test_cache.py</td><td class="n">22</td></tr>
+  <tr><td class="k">test_corrective.py</td><td class="n">15</td></tr>
   <tr><td class="k">test_ingest.py</td><td class="n">13</td></tr>
+  <tr><td class="k">test_web_ui.py</td><td class="n">12</td></tr>
+  <tr><td class="k">test_retrieval.py</td><td class="n">11</td></tr>
   <tr><td class="k">test_api.py</td><td class="n">10</td></tr>
-  <tr><td class="k">test_web_ui.py</td><td class="n">9</td></tr>
+  <tr><td class="k">test_evaluation.py</td><td class="n">8</td></tr>
   <tr><td class="k">test_indexing.py</td><td class="n">5</td></tr>
-  <tr><td><strong>Total</strong></td><td class="n"><strong>100</strong></td></tr>
+  <tr><td><strong>Total</strong></td><td class="n"><strong>253</strong></td></tr>
 </table>
 <div>
 <p class="small">
@@ -484,36 +702,629 @@ between runs, which made the limiter tests pass alone and fail together.
 </p>
 <p class="small">
 <code>test_web_ui.py</code> guards the Python/JavaScript seam. The pipeline panel
-is rendered in the browser now, so those tests compare the JS stage table against
-the keys <code>assistant.py</code> actually writes. Renaming a trace key would not
-raise — the panel would silently show “not reached”.
+is rendered in the browser, so those tests compare the JS stage table against the
+keys <code>assistant.py</code> actually writes. Renaming a trace key would not
+raise — the panel would silently show &ldquo;not reached&rdquo;.
+</p>
+<p class="small">
+The two largest suites are the two newest concerns.
+<code>test_security.py</code> and <code>test_accounts.py</code> together cover
+token forgery, purpose confusion between verify and reset tokens, expiry,
+single-use enforcement, and the session-invalidation comparison — the paths where
+a bug is silent rather than loud.
 </p>
 </div>
 </div>
 
-<h2>11. Decisions worth knowing</h2>
+<h3>Evaluation results</h3>
+<table>
+  <tr><th style="width:40%">Metric</th><th>Value</th></tr>
+  <tr><td>overall accuracy</td><td>100% (34/34)</td></tr>
+  <tr><td>safety compliance</td><td>100% <span class="small muted">(must be 100%)</span></td></tr>
+  <tr><td>false refusal rate</td><td>0% <span class="small muted">— the noisy metric</span></td></tr>
+  <tr><td>retrieval hit rate</td><td>100% <span class="small muted">— has not missed across either run</span></td></tr>
+  <tr><td>gate-2 threshold</td><td>5.5 (calibrated)</td></tr>
+</table>
+<p class="small muted">
+34 labelled cases, <code>gpt-4o-mini</code> throughout, grouped into buckets:
+must-answer, must-refuse safety cases, unanswerable-in-corpus, and precision cases
+that assert the exact chunk cited. <strong>This is one run, and the run is not
+deterministic</strong> — Gate 3 is an LLM judge and has historically flipped a case
+between runs. Treat a single clean sweep as evidence, not a guarantee; an earlier
+100% recorded here turned out to be a lucky run. Re-run before quoting.
+</p>
+
+<h2 class="break">12. What the evaluation caught</h2>
+
+<h3>Fixed — a gap in a definition, not in the code</h3>
+<p>
+An earlier run scored 91%, and all three failures were the same defect. Gate 1's
+<em>model</em> pass refused three precision cases as <code>personalized_advice</code>
+before retrieval ran, reasoning &ldquo;advice for a tourist's situation&rdquo; and
+&ldquo;treatment advice for a child&rdquo;. None of those queries names a specific
+person. The prompt's definition said &ldquo;a specific person&rdquo;, but every
+example given was first-person — so an <em>indefinite third party</em> fell into a
+gap the examples never covered. Fixed by naming that case explicitly and bumping
+<code>guardrails_version</code>, which invalidates the cached verdicts.
+</p>
+
+<div class="note warn">
+  <div class="t">Open — the corrective band can lift an unanswerable query</div>
+  <code>una-vaccine-temp</code> is unanswerable and scores <strong>4.0</strong> on the
+  first pass, squarely inside the corrective band. The retry surfaces passages
+  scoring <strong>7.0</strong>, clearing the 5.5 threshold, and Gate 2 passes it.
+  Only the generator declining for insufficient context keeps it from being
+  answered — in both runs. The bar never moved, but a retry that raises an
+  unanswerable query by three points is exactly the leak this band risks, and it
+  took one evaluation case to demonstrate. A comparable case,
+  <code>una-clavicle</code>, behaves correctly and stays at 4.0.
+</div>
+
+<p>
+Gate 3's number check <em>was</em> a plain bag-of-digits comparison, which made a
+correctly-grounded answer writing <code>10,000</code> against a passage writing
+<code>10000</code> tokenise to <code>{10, 0}</code> versus <code>{10000}</code> and
+refuse. Thousands separators, Western and Indian lakh grouping alike, are now
+canonicalised before tokenising; the lookahead requires a group of two or three
+digits so an enumeration such as &ldquo;chunks 1,2&rdquo; is not silently joined
+into the number 12.
+</p>
+<div class="note">
+  <div class="t">Why the OCR case was deliberately left alone</div>
+  The dengue transcript reads <code>1ooo0</code> for 10,000, and folding those
+  letters onto digits would make that passage match. It is not done, because the
+  asymmetry of this check runs the other way: a false <strong>flag</strong> costs a
+  refusal, which is safe, while a false <strong>match</strong> lets a fabricated
+  dose through, which is the one failure this gate exists to catch. Mapping letters
+  onto digits buys the second to save the first. The fix for bad source text is
+  better source text, not a looser guardrail.
+</div>
+<p>
+One limitation remains open: the reranker tends toward the ends of its scale, which
+makes the 4&ndash;6 band fire less often than it was designed to &mdash; and, as
+&sect; 13.2 shows, leaves the calibrated threshold resting on data that does not
+actually constrain it.
+</p>
+
+<h2 class="break">13. Three mechanisms in detail</h2>
+
+<h3>13.1 Reciprocal rank fusion</h3>
+<p>
+Hybrid retrieval produces two ranked lists over the same corpus. They are combined
+by rank, never by score:
+</p>
+<pre>score(d) = &Sigma;  w / (k + rank(d) + 1)        k = 60, rank 0-indexed
+         rankings containing d</pre>
+<p>
+BM25 scores are unbounded and corpus-relative; cosine similarity is bounded.
+Normalising one onto the other invents a comparison that does not exist, so RRF
+only ever compares a document's position <em>within its own ranking</em>.
+</p>
+<p>
+The constant <code>k = 60</code> is what makes the metric reward
+<strong>agreement over position</strong>. With k that large the curve is almost
+flat — rank 0 contributes 1/61 = 0.01639 and rank 1 contributes 1/62 = 0.01613, a
+difference of 1.6% — so a small rank perturbation barely moves anything, while
+appearing in a second list adds a whole further term:
+</p>
+<table>
+  <tr><th style="width:34%">Document</th><th style="width:16%">dense</th><th style="width:16%">lexical</th><th>fused score</th></tr>
+  <tr><td>A — top of one list only</td><td>rank 0</td><td>absent</td><td class="k">1/61 = 0.0164</td></tr>
+  <tr><td>B — mid-rank in both</td><td>rank 5</td><td>rank 3</td><td class="k">1/66 + 1/64 = 0.0308</td></tr>
+</table>
+<p>
+B wins, and that is the intended behaviour: a passage both halves found is worth
+more than a passage one half loved. Were <code>k</code> small (at k=1, rank 0 gives
+1/2 and rank 1 gives 1/3, a 33% drop) position would dominate and the fusion would
+reduce to whichever list happened to be more confident.
+</p>
+<p class="small muted">
+Two implementation details keep the fusion honest. The BM25 index is built over
+<code>title + section_path + text</code>, the same contextual form the embeddings
+saw — index the body alone and RRF is fusing rankings over two different
+documents. And <code>BM25Index.search</code> discards zero scores, so a query with
+no lexical overlap contributes an <em>empty</em> ranking and the fusion degrades
+cleanly to dense-only rather than injecting noise. The <code>weights</code>
+parameter exists but is unused: both halves currently count equally.
+</p>
+
+<h3>13.2 The calibration sweep</h3>
+<p>
+<code>rag eval calibrate</code> measures Gate 2's threshold rather than choosing
+it. <code>collect_scores</code> runs retrieval and reranking only — it needs the
+top-1 score per question, so it skips generation and the two output judges, which
+is most of the cost of a full run. Cases in the personalized, emergency and
+out-of-domain buckets are skipped entirely: Gate 1 refuses them before retrieval,
+so they contribute no score.
+</p>
+<p>
+<code>sweep</code> then walks a grid of 0.0 to 10.0 in steps of 0.5 and, at each
+candidate threshold, counts four cells:
+</p>
+<table>
+  <tr><th style="width:30%">Cell</th><th>Meaning</th></tr>
+  <tr><td class="k">answerable_kept</td><td>should pass and does — top-1 &ge; t</td></tr>
+  <tr><td class="k">answerable_lost</td><td>should pass and does not — a false refusal</td></tr>
+  <tr><td class="k">unanswerable_refused</td><td>should fail and does — top-1 &lt; t</td></tr>
+  <tr><td class="k">unanswerable_leaked</td><td>should fail and does not — the dangerous cell</td></tr>
+</table>
+<p>
+Only the <em>unanswerable</em> bucket counts as should-fail. Out-of-domain queries
+are deliberately excluded: &ldquo;write me a poem about aspirin&rdquo; retrieves
+genuinely relevant aspirin passages, and what is wrong with it is the intent, which
+Gate 1 already rejected. Counting it against Gate 2 would inflate the threshold and
+buy nothing but false refusals on real questions.
+</p>
+<p>
+The winner is not the best-scoring threshold but the <strong>midpoint of the
+longest contiguous run</strong> of thresholds achieving the best accuracy. Rerank
+scores move slightly between runs, and a threshold sitting exactly on an observed
+score flips that case on the next query; the midpoint puts maximum headroom on both
+sides.
+</p>
+<div class="note warn">
+  <div class="t">What this actually produced, and why it is weak evidence</div>
+  Replaying the sweep against the committed <code>calibration.json</code>: the
+  answerable cases all scored <strong>10.0</strong> and the unanswerable ones all
+  <strong>0.0</strong>, so <em>every</em> grid point from 0.5 to 10.0 scores 100%
+  accuracy — a perfect band 20 points wide. The midpoint of that band is
+  <strong>5.5</strong>, and that is the entire derivation of the shipped threshold.
+  <br><br>
+  In other words the calibration data does not constrain the threshold at all; it
+  only establishes that the two classes are separable. That is why § 12's leak
+  matters so much: the near-miss cases scoring 4.0 are the <em>only</em> data that
+  would genuinely pin this number. Adding two of them to the calibration set moves
+  the perfect band to 4.5–10.0 and the chosen threshold to <strong>7.5</strong>,
+  which would close the leak — at the cost of refusing any real question whose best
+  passage scores 7.0 or below, a risk the current 9-case answerable set is far too
+  clean to measure. Worth testing against a larger answerable set before adopting.
+</div>
+
+<h3>13.3 The repair heuristic</h3>
+<p>
+When the support judge rejects some claims but not most of them, Gate 3 salvages
+the answer instead of discarding it — the generator was explicitly told that
+partial answers are acceptable, so throwing away six verified claims because a
+seventh failed contradicts the instruction the answer was written under.
+</p>
+<pre>overlap(sentence, bad_claim) = |words(sentence) &cap; words(bad_claim)|
+                               ---------------------------------------
+                                        |words(bad_claim)|
+
+drop the sentence when  max over bad claims  &ge; 0.60</pre>
+<p>
+The denominator is the <em>claim's</em> word count, not the sentence's and not the
+union. That asymmetry is deliberate: the question being asked is &ldquo;how much of
+this unsupported claim appears in this sentence&rdquo;, so a long sentence carrying
+a short bad claim is still caught, while a short sentence sharing a few words with
+a long claim is not. The test is for the sentence that <em>carries</em> the claim,
+not for topical resemblance.
+</p>
+<p>Two independent bail-outs return to a refusal rather than a thin answer:</p>
+<ul>
+  <li>no claims survive the filter, or</li>
+  <li>the remaining prose is empty or under <strong>12 words</strong> — a single
+      surviving clause is not an answer.</li>
+</ul>
+<p>
+Above <code>MAX_UNSUPPORTED_FRACTION</code> = 0.4 no repair is attempted at all. A
+couple of stray sentences is a drafting slip; a majority means the model was
+working from something other than the passages, and there is nothing to salvage.
+</p>
+<p class="small muted">
+Ordering note: <code>validate</code> re-runs the framing check on the
+<em>repaired</em> answer, so stripping cannot produce unsafe framing that goes
+unchecked. The number check is not re-run, which is sound because repair only ever
+removes text and removal cannot introduce an untraceable digit.
+</p>
+<p>
+There is a third ordering question, and it is the one that needed fixing: a
+<em>supported</em> claim can share a sentence with an unsupported one, so the
+sentence is removed underneath it. Reporting that claim anyway would leave
+<code>claims</code> naming something <code>answer</code> no longer says, breaking
+the contract the generator wrote under &mdash; rule 5 requires every claim to trace
+to a sentence in the answer, and a repaired answer has to hold to the same rule.
+</p>
+<p>
+So sentences are now partitioned into kept and dropped, and a surviving claim is
+discarded when it is carried by a dropped sentence and by no kept one:
+</p>
+<pre>keep claim  &lt;=&gt;  carried_by(claim, kept)  or  not carried_by(claim, dropped)</pre>
+<p>
+The second half of that condition is deliberately conservative. A claim the overlap
+measure cannot place in <em>either</em> half &mdash; a paraphrase loose enough to
+match no single sentence &mdash; is left alone, because failing to locate a claim is
+not evidence that its sentence was removed, and shedding claims on that basis would
+cost more than the inconsistency it avoids. Both branches are covered by tests. The
+threshold is now the named constant <code>SENTENCE_CARRIES_CLAIM</code>, since the
+same measure decides which sentences go and which claims went with them, and the
+two must not drift apart.
+</p>
+
+<style>pre.prompt{break-inside:auto}</style>
+<h2 class="break">14. The prompts</h2>
+
+<p>
+Three of Gate 3's four checks, and the whole of Gate 1, <em>are</em> prompts. They
+are reproduced here in full rather than described, because several of the lines
+below are not configuration &mdash; they are fixes for measured failures, and
+paraphrasing them loses exactly what is worth auditing.
+</p>
+<p>
+Every call has the same shape. <code>llm.parse()</code> sends two messages and
+nothing else:
+</p>
+<pre>messages = [{"role": "system", "content": system},
+            {"role": "user",   "content": user}]
+response_format = &lt;a pydantic model&gt;</pre>
+<p>
+There is <strong>no conversation history anywhere</strong> &mdash; every call is a
+fresh two-message exchange, so there is no multi-turn context to poison. Output is
+always a parsed schema, never free text.
+</p>
+<table>
+  <tr><th style="width:26%">Call</th><th style="width:20%">Model</th><th style="width:14%">Temp</th><th>User message carries</th></tr>
+  <tr><td>Gate 1 &middot; intent</td><td>guard</td><td>0</td><td>the raw query, verbatim</td></tr>
+  <tr><td>HyDE</td><td>guard</td><td>0 <span class="small muted">(0.7 if n&gt;1)</span></td><td>the query</td></tr>
+  <tr><td>Reranker</td><td>guard</td><td>0</td><td>query + all candidate passages</td></tr>
+  <tr><td>Generator</td><td><strong>main</strong></td><td>0</td><td>kept passages + query</td></tr>
+  <tr><td>Gate 3 &middot; support</td><td>guard</td><td>0</td><td>each claim + its cited passages</td></tr>
+  <tr><td>Gate 3 &middot; safety</td><td>guard</td><td>0</td><td>the drafted answer only</td></tr>
+</table>
+
+<h3>14.1 The shared boundary</h3>
+<p>
+<code>policy.SCOPE_STATEMENT</code> is defined once and injected into <em>two</em>
+system prompts &mdash; Gate 1's classifier and the generator. That is what keeps the
+boundary auditable in one file instead of drifting across six prompts. It is shown
+here once; §&nbsp;14.2 and §&nbsp;14.5 are prefixed by it.
+</p>
+<pre class="prompt">You are a Medical Guideline Assistant. You explain what official government health guidelines (MOHFW Standard Treatment Guidelines) say. You are not a clinician and you are not talking to a patient about their own case.
+
+ALLOWED: summarising, quoting, and explaining guideline content in the third person, always attributed to a cited source.
+
+FORBIDDEN: telling a specific person what to do; diagnosing; recommending a treatment or dose for an individual; interpreting someone&#x27;s symptoms, test results, or history; emergency or crisis instructions.
+
+If a question asks for something forbidden, refuse — do not answer a nearby allowed question instead unless the user asks.</pre>
+<p class="small muted">
+The last line is doing quiet work: without it a refused question invites the model
+to answer a nearby permitted one, which is helpful behaviour in general and the
+wrong behaviour here &mdash; someone asking what <em>they</em> should take has not
+asked what the guidelines say in general, and answering as though they had is how a
+refusal turns into advice by another route.
+</p>
+
+<h3>14.2 Gate 1 &middot; intent</h3>
+<h4>System <span class="small muted">(after the scope statement)</span></h4>
+<pre class="prompt">Classify the user&#x27;s query into exactly one label:
+
+- &quot;in_scope&quot;: a general question about health, disease or medicine -- what a condition is, its causes, symptoms, complications, risk factors, prevention, diagnosis, management, drugs, doses or referral. Third-person or impersonal framing. The user does not have to mention the guidelines: a bare &quot;what is X&quot; or &quot;what are the side effects of X&quot; is a request for what the guidelines say about X.
+- &quot;personalized_advice&quot;: asks you to advise, diagnose, dose, or interpret findings for a specific, identified person -- the user (&quot;should I&quot;, &quot;my dose&quot;), someone they identify as theirs (&quot;my father&quot;, &quot;my daughter&#x27;s rash&quot;), or a person whose particulars they supply (&quot;a 68-year-old on metformin whose ankles are now swollen, what next&quot;). The test is whether answering means reasoning about one real individual&#x27;s situation.
+- &quot;emergency&quot;: describes an acute or crisis situation needing immediate care.
+- &quot;out_of_domain&quot;: not about health or medicine at all (sport, code, travel, politics), or a question about you rather than about a health topic.
+
+Asking about a drug, a dose, or a treatment is IN SCOPE when the question is about what the guideline states. It is PERSONALIZED_ADVICE only when it asks what a specific, identified person should do.
+
+An INDEFINITE person is not a specific person. &quot;a child&quot;, &quot;a tourist&quot;, &quot;a 55-year-old&quot;, &quot;adults&quot;, &quot;pregnant women&quot; are clinical categories -- the vocabulary the guidelines are themselves written in -- so a question framed around one is in_scope. Compare: &quot;how many days of IV antibiotics for empyema in a child&quot; asks what the guideline states for a category; &quot;how long should my child stay on antibiotics&quot; asks about one individual. Plain, non-clinical wording (&quot;dripped in&quot;, &quot;pus around the lung&quot;) is how ordinary people say clinical things -- it is not evidence that the question is personal.
+
+Whether the corpus actually covers the topic is NOT yours to decide -- a later retrieval stage refuses when it finds nothing. &quot;out_of_domain&quot; means the wrong subject, never a subject you suspect is thinly covered. When a health question is neither personal nor urgent, it is in_scope.
+
+Examples:
+&quot;what is diabetes&quot; -&gt; in_scope
+&quot;what are the side effects of metformin&quot; -&gt; in_scope
+&quot;how is drug-resistant tuberculosis treated&quot; -&gt; in_scope
+&quot;how fast can quinine be infused&quot; -&gt; in_scope
+&quot;what should a traveller take before visiting a malarious area&quot; -&gt; in_scope
+&quot;how many days of iv antibiotics for empyema in a child&quot; -&gt; in_scope
+&quot;should i stop taking my metformin&quot; -&gt; personalized_advice
+&quot;how long should my child stay on antibiotics&quot; -&gt; personalized_advice
+&quot;my father is unconscious, what do i do&quot; -&gt; emergency
+&quot;who won the match last night&quot; -&gt; out_of_domain</pre>
+<h4>User</h4>
+<pre class="prompt">{query}          &lt;- the raw query, with no prefix or wrapper</pre>
+<p>
+Three passages here exist because of specific failures. The <strong>indefinite
+person</strong> paragraph is the fix for the 91% run described in §&nbsp;12: the
+definition said &ldquo;a specific person&rdquo; but every example was first-person,
+so &ldquo;a child&rdquo; fell into a gap. It is safe to teach this pass that an
+indefinite person is a clinical category <em>only</em> because the regex pass has
+already refused every first-person phrasing before this prompt is consulted.
+</p>
+<p>
+The <strong>&ldquo;not yours to decide&rdquo;</strong> paragraph draws a line
+between the two refusal gates: this one judges the <em>subject</em>, Gate 2 judges
+<em>coverage</em>. Without it the classifier starts guessing what is in the corpus
+and returns <code>out_of_domain</code> for thinly-covered topics, which is a
+refusal with no evidence behind it.
+</p>
+<p class="small muted">
+And the note that plain wording (&ldquo;dripped in&rdquo;, &ldquo;pus around the
+lung&rdquo;) is not evidence of a personal question: ordinary people describe
+clinical things in ordinary words, and reading informality as intimacy would refuse
+precisely the users who most need a guideline summarised.
+</p>
+
+<h3>14.3 HyDE</h3>
+<h4>System</h4>
+<pre class="prompt">You write short passages that imitate the Standard Treatment Guidelines published by the Ministry of Health and Family Welfare, Government of India.
+
+Given a clinical question, write the guideline passage that would answer it. Write it as the guideline itself would: impersonal, declarative, clinical register, the vocabulary a guideline would use for this topic (drug names, investigations, criteria, thresholds).
+
+Rules:
+- About 90 words per passage. One paragraph, prose only.
+- No headings, no markdown, no bullet points, no citations, no preamble.
+- Do not address a reader, do not hedge, do not mention guidelines in general terms -- state the content.
+- Write about the specific condition asked about and nothing else.
+- If you are unsure of the exact contents, still write the passage you would expect: approximate specifics are useful here and are never presented as fact.
+
+Return exactly 1 passage(s).
+
+This text is retrieval scaffolding. It is never shown to anyone, never quoted, and never used to answer the question -- it is embedded and discarded, purely to find the real passages in the corpus. Write it directly.</pre>
+<h4>User</h4>
+<pre class="prompt">Question: {query}</pre>
+<p>
+This is the one prompt in the project that licenses invention &mdash;
+&ldquo;approximate specifics are useful here and are never presented as
+fact&rdquo; &mdash; and the last paragraph is what makes that safe to say. The
+passage is embedded and discarded; it is never shown, quoted, or answered from.
+Asking for the guideline's own register (drug names, investigations, thresholds) is
+the entire point: it moves the query vector into the vocabulary the corpus is
+written in, which is why HyDE helps most when the user's wording and the
+guideline's diverge.
+</p>
+
+<h3>14.4 Reranker</h3>
+<h4>System</h4>
+<pre class="prompt">You score how well each passage answers a question, for a retrieval system over official medical guidelines.
+
+Score each passage independently on this fixed scale. Do NOT rank them against each other, and do not spread scores out to differentiate — if every passage is irrelevant, every score should be low.
+
+10 — directly and completely answers the question
+7-9 — contains most of the answer
+4-6 — related topic, contains part of the answer
+1-3 — same general subject area, does not answer the question
+0 — unrelated
+
+Return one score for every passage, using the passage numbers given.</pre>
+<h4>User</h4>
+<pre class="prompt">Question: {query}
+
+Passages:
+
+[0] {title} &mdash; {section_path}
+{text}
+
+[1] {title} &mdash; {section_path}
+{text}
+...</pre>
+<p>
+&ldquo;Do NOT rank them against each other, and do not spread scores out to
+differentiate&rdquo; is the load-bearing instruction. Gate 2 refuses on the top-1
+value, so a relative ordering is useless &mdash; the best of five irrelevant
+passages still ranks first. The clause about every score being low when every
+passage is irrelevant is there to counteract the strong default pull toward using
+the whole range.
+</p>
+<p class="small muted">
+Note the bare indices. The reranker sees <code>[0] [1] [2]</code>, not citation
+markers: it is scoring relevance, and provenance would be noise. The
+<code>C1&hellip;C6</code> labels are assigned by Gate 2 <em>after</em> reranking,
+to the passages that cleared the bar, and only then rendered into the generator's
+prompt.
+</p>
+
+<h3>14.5 Generator</h3>
+<h4>System <span class="small muted">(after the scope statement)</span></h4>
+<pre class="prompt">You answer ONLY from the numbered passages provided. You have no other
+knowledge of medicine for the purposes of this task.
+
+Rules:
+
+1. Every factual statement you make must come from a passage, and must carry the
+marker(s) of the passage(s) it came from, e.g. [C2].
+
+2. If the passages do not answer the question, set insufficient_context to true
+and leave claims empty. Do not fill the gap from memory. Partial answers are
+fine - say what the passages support and no more.
+
+3. Write in the third person, attributed to the source: &quot;the guidelines state
+that...&quot;, &quot;recommended management includes...&quot;. Never address the reader as a
+patient and never use the imperative (&quot;take&quot;, &quot;you should&quot;).
+
+4. Do not introduce any number - a dose, a duration, an age, a threshold - that
+does not appear verbatim in a passage you cite.
+
+5. `answer` is the prose shown to the user. `claims` decomposes that same answer
+into individual factual statements with their sources; every claim must be
+traceable to a sentence in `answer`.</pre>
+<h4>User</h4>
+<pre class="prompt">Passages:
+
+[C1 | tb-standards | Standards for TB Care in India | &sect;Treatment &gt; Regimens | pp.34-35]
+{text}
+
+[C2 | ... ]
+{text}
+
+Question: {query}</pre>
+<p>
+The opening line &mdash; &ldquo;You have no other knowledge of medicine for the
+purposes of this task&rdquo; &mdash; is a deliberate amnesia instruction, and rule 2
+gives it an escape hatch that does not involve guessing: set
+<code>insufficient_context</code> rather than fill the gap. &ldquo;Partial answers
+are fine&rdquo; in the same rule is what later licenses Gate 3's repair pass to
+strip a claim and keep the rest.
+</p>
+<p>
+Rule 4 is the one Gate 3 then verifies mechanically. Asking the model not to
+introduce an uncited number is worth doing, but it is an instruction, and
+instructions are followed probabilistically; the regex in
+<code>check_numbers</code> is what makes it a guarantee.
+</p>
+<p class="small muted">
+Note the ordering: passages first, question last. The generator reads the evidence
+before it knows what it is being asked, and the final thing in its context is the
+question itself. The full provenance in each label is what lets an answer cite a
+document, a section and a page rather than a bare marker.
+</p>
+
+<h3>14.6 Gate 3 &middot; support judge</h3>
+<h4>System</h4>
+<pre class="prompt">You verify citations for a medical guideline assistant.
+
+For each numbered claim you are given the passage(s) it cites. Decide whether
+those passages actually state, or directly entail, the claim.
+
+Be strict. Mark supported=false if the claim adds a detail the passage does not
+contain, generalises beyond it, or changes a number, population, or condition.
+Topical similarity is not support. If the passage is merely about the same
+subject, that is false.</pre>
+<h4>User</h4>
+<pre class="prompt">[0] Claim: {claim.text}
+Cited passages:
+  - {chunk.text}
+
+[1] Claim: {claim.text}
+Cited passages:
+  - {chunk.text}
+...</pre>
+<p>
+&ldquo;Topical similarity is not support. If the passage is merely about the same
+subject, that is false&rdquo; is the whole prompt in two sentences. A retrieval
+system's failure mode is returning something about the right topic, and a judge
+that accepts topicality as support would wave through exactly the answers this gate
+exists to stop.
+</p>
+<p>
+<strong>This judge is never shown the question.</strong> It compares text to text
+and nothing else, so it cannot be swayed by what the user appeared to want. Its
+verdicts feed the repair pass (§&nbsp;13.3): below a 40% unsupported share the
+failing claims and their sentences are stripped and the rest is kept; above it, the
+answer is refused.
+</p>
+
+<h3>14.7 Gate 3 &middot; safety judge</h3>
+<h4>System</h4>
+<pre class="prompt">You check whether a drafted answer stays within its boundary.
+
+The assistant may report what official medical guidelines say, in the third
+person, attributed to a source. It may discuss drugs, doses, and treatments as
+*guideline content*.
+
+It may NOT address the reader as a patient, tell anyone what to do, assert what
+someone has, or issue instructions.
+
+The distinction is framing, not subject matter. In each pair the topic is
+identical and only the framing differs:
+
+  OK  - &quot;The guidelines list rifampicin at 10 mg/kg daily for adults [C2].&quot;
+  NOT - &quot;You should take rifampicin 10 mg/kg daily.&quot;
+
+  OK  - &quot;Lower chest indrawing identifies cases requiring urgent referral [C1].&quot;
+  NOT - &quot;Take your child to hospital immediately.&quot;
+
+  OK  - &quot;The guidelines classify this presentation as severe dengue [C3].&quot;
+  NOT - &quot;You have severe dengue.&quot;
+
+Urgency, danger signs, and referral criteria are ordinary guideline CONTENT.
+Reporting that a guideline calls something an emergency is not itself an
+emergency instruction — flag emergency_instruction only when the text directs
+the reader to act, not when it describes what a document says.
+
+Flag only genuine boundary crossings. Descriptive, attributed, third-person
+prose is not a violation however serious its subject matter.</pre>
+<h4>User</h4>
+<pre class="prompt">{answer.answer}          &lt;- the drafted prose alone</pre>
+<p>
+Teaching by <em>paired</em> examples is what makes this work: in each pair the topic
+is identical and only the framing differs, so the model cannot learn &ldquo;refuse
+anything about doses&rdquo; from them. That matters because the guidelines are made
+of doses &mdash; a subject-matter filter would refuse most of the corpus.
+</p>
+<p>
+The penultimate paragraph is a correction that had to be made explicit. Danger
+signs, referral criteria and the word &ldquo;emergency&rdquo; are ordinary
+guideline <em>content</em>; a classifier that flags them turns the paediatric and
+critical-care sections unanswerable. So <code>emergency_instruction</code> fires
+only when the text directs the reader to act.
+</p>
+<p class="small muted">
+Like the support judge, this one is given a narrow view &mdash; the answer text and
+neither the passages nor the question. Framing is a property of the output alone,
+and showing it the evidence would only offer grounds to excuse a violation.
+</p>
+
+<h3>14.8 What each call is <em>not</em> given</h3>
+<p>
+The inputs withheld from each call are part of the design, and they are invisible
+from the prompts themselves:
+</p>
+<table>
+  <tr><th style="width:26%">Call</th><th style="width:34%">Deliberately not shown</th><th>Why</th></tr>
+  <tr><td>Gate 1 &middot; intent</td><td>any retrieved passage</td>
+      <td>It runs before retrieval. A personal question must not have guideline text pulled up beside it where a later stage could be tempted to answer from it.</td></tr>
+  <tr><td>Reranker</td><td>citation markers</td>
+      <td>Scoring relevance; provenance is noise. Markers are assigned afterwards.</td></tr>
+  <tr><td>Gate 3 &middot; support</td><td>the user's question</td>
+      <td>So it cannot be swayed by what the user wanted to hear. Text against text only.</td></tr>
+  <tr><td>Gate 3 &middot; safety</td><td>passages and question</td>
+      <td>Framing is a property of the output alone; evidence would only supply excuses.</td></tr>
+  <tr><td>every call</td><td>conversation history</td>
+      <td>Two messages, always. Nothing carries between calls or between requests, so there is no accumulated context to drift or be poisoned.</td></tr>
+</table>
+<p class="small muted">
+The generator is the one call given a wide view &mdash; scope statement, rules,
+full passages with provenance, and the question &mdash; because it is the only one
+asked to <em>write</em> something. Every call that <em>judges</em> is narrowed to
+the smallest input sufficient for its decision.
+</p>
+
+<h2 class="break">15. Decisions worth knowing</h2>
 <ul>
   <li><strong>Rank fusion, not score fusion.</strong> Dense distances and BM25 scores
       are not on a comparable scale, so hybrid retrieval fuses on rank.</li>
   <li><strong>Absolute rerank scores.</strong> Gate 2 refuses on the top-1 value, so
       the prompt asks how well a passage answers the question on a fixed scale —
       never which passage is best.</li>
-  <li><strong>Additive query expansion.</strong> “TB” becomes “TB tuberculosis”, never
-      “tuberculosis”: replacing the token would destroy exactly what BM25 matches on.
-      Ambiguous abbreviations (<code>MI</code>, <code>DM</code>, <code>BP</code>) are
-      left alone, because guessing wrong in a medical corpus is not recoverable.</li>
+  <li><strong>Index drift is reported, not absorbed.</strong> The dense half resolves its
+      hits back to the <em>local</em> chunk objects by <code>chunk_id</code>. A chunk
+      present remotely but missing locally is reconstructed so the answer stays citable,
+      and listed in <code>trace.retrieval.orphan_chunks</code> — the two halves having
+      drifted is a fact worth surfacing, not one worth hiding behind a working answer.</li>
+  <li><strong>The corrective action points at the same corpus.</strong> CRAG falls back
+      to web search on a poor retrieval score. That action cannot exist here: every
+      claim must trace to a sha256-pinned document, which is what makes the citations,
+      the manifest and Gate 3's provenance check mean anything.</li>
+  <li><strong>The bar never moves.</strong> A corrective pass earns a second attempt at
+      <code>confidence_threshold</code>, never a lower one. The moment the band becomes
+      a cheaper way past Gate 2, it has inverted the gate's purpose.</li>
+  <li><strong>Framing is the boundary, not subject matter.</strong> These guidelines are
+      <em>made of</em> doses, so blocking dosage text would refuse most of the corpus.
+      &ldquo;The guidelines list rifampicin at 10 mg/kg daily for adults [C2]&rdquo; is
+      allowed; &ldquo;You should take rifampicin 10 mg/kg daily&rdquo; is not. Same drug,
+      same number — one reports, the other instructs.</li>
+  <li><strong>Additive query expansion.</strong> &ldquo;TB&rdquo; becomes &ldquo;TB
+      tuberculosis&rdquo;, never &ldquo;tuberculosis&rdquo;: replacing the token would
+      destroy exactly what BM25 matches on. Ambiguous abbreviations (<code>MI</code>,
+      <code>DM</code>, <code>BP</code>) are left alone, because guessing wrong in a
+      medical corpus is not recoverable.</li>
   <li><strong>Refusals are 200s.</strong> Encoding them as 4xx would push callers toward
       treating a correct outcome as a fault to be retried around.</li>
-  <li><strong>The evaluation view has no “run” button.</strong> A run costs real API calls
-      and takes minutes — too easy to trigger by accident from a browser.</li>
+  <li><strong>Reset tokens are single-use without a revocation list.</strong> The
+      comparison against <code>password_changed_at</code> does the work that a stored
+      token table would, and it signs out every other session for free.</li>
+  <li><strong>The evaluation view has no &ldquo;run&rdquo; button.</strong> A run costs real
+      API calls and takes minutes — too easy to trigger by accident from a browser.</li>
   <li><strong>Blank provenance over invented provenance.</strong> <code>corpus scan</code>
       leaves url, specialty and version empty rather than guessing; those fields end up
       in citations, and a blank is visible where a fabrication is not.</li>
 </ul>
 
 <p class="small muted" style="margin-top:2em; border-top:1px solid var(--line); padding-top:.6em;">
-Generated from the repository at commit time · 100 tests passing ·
-figures and measurements in this document were taken from the running system.
+Generated from the repository at commit <code>df86a90</code> ·
+253 tests passing · line counts, chunk counts and test counts in this document were
+read from the working tree; evaluation figures are from the last recorded run and
+should be re-measured before being quoted.
 </p>
 
 </body>

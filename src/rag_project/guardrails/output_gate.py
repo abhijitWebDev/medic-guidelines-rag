@@ -39,13 +39,33 @@ _LIST_NUM = re.compile(r"(^|[.!?]\s+)\d+[.)]\s", re.MULTILINE)
 # Clinical quantities: 10, 2.5, 10-15, 1/2. Excludes years like (2019) handled below.
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
 
+# A thousands separator *inside* a number -- Western grouping (10,000) or Indian
+# lakh grouping (1,00,000). The lookahead demands a group of two or three digits
+# so an enumeration is left alone: "chunks 1,2" must not become the number 12.
+#
+# Only separators are canonicalised here, never characters. It is tempting to go
+# further and fold OCR homoglyphs (the dengue transcript reads "1ooo0" for
+# 10,000), but that would be the wrong direction for this particular check. A
+# false *flag* costs a refusal, which is safe; a false *match* lets a fabricated
+# dose through, which is the failure this gate exists to catch. Mapping letters
+# onto digits buys the second to save the first. The fix for bad source text is
+# better source text -- see the OCR note in the corpus section of the docs.
+_GROUPING = re.compile(r"(?<=\d),(?=\d{2,3}\b)")
+
 
 def strip_markers(text: str) -> str:
     return _LIST_NUM.sub(r"\1 ", _MARKER.sub(" ", text))
 
 
 def numbers_in(text: str) -> set[str]:
-    return {n.lstrip("0") or "0" for n in _NUMBER.findall(text)}
+    """The clinical quantities in `text`, canonicalised for comparison.
+
+    Thousands separators are removed before tokenising, so an answer writing
+    "10,000" and a passage writing "10000" are recognised as the same quantity
+    rather than as the unrelated tokens 10 and 0. Leading zeros are dropped for
+    the same reason.
+    """
+    return {n.lstrip("0") or "0" for n in _NUMBER.findall(_GROUPING.sub("", text))}
 
 
 #: Above this share of unsupported claims, the answer is not salvaged but
@@ -56,18 +76,41 @@ MAX_UNSUPPORTED_FRACTION = 0.4
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")
 _WORD_RE = re.compile(r"[a-z0-9]+")
 
+#: Share of a *claim's* words that must appear in a sentence for that sentence
+#: to count as carrying the claim. Measured against the claim rather than the
+#: sentence on purpose: the question is how much of the claim the sentence
+#: states, so a long sentence carrying a short claim still counts while a short
+#: sentence brushing a long claim does not. Named because `repair` now applies
+#: it twice -- once to find the sentences to drop, once to find the claims that
+#: went with them -- and the two must not drift apart.
+SENTENCE_CARRIES_CLAIM = 0.6
+
 
 def _words(text: str) -> set[str]:
     return set(_WORD_RE.findall(text.lower()))
 
 
+def _carried_by(claim: str, sentences: list[str]) -> bool:
+    """Whether any of `sentences` still states `claim`."""
+    cw = _words(claim)
+    if not cw:
+        return False
+    return any(
+        len(_words(s) & cw) / len(cw) >= SENTENCE_CARRIES_CLAIM for s in sentences
+    )
+
+
 def repair(answer: GroundedAnswer, unsupported: list[str]) -> GroundedAnswer | None:
-    """Drop unsupported claims and the sentences carrying them.
+    """Drop unsupported claims, the sentences carrying them, and any claim
+    those sentences took with them.
 
     The generator is explicitly told that partial answers are acceptable, so
     discarding six verified claims because a seventh was unsupported contradicts
     the instruction the answer was written under. Returns None when the answer
     cannot be salvaged, and the caller refuses.
+
+    What comes back satisfies the same contract the generator wrote under:
+    every claim in `claims` is still traceable to a sentence in `answer`.
     """
     kept_claims = [c for c in answer.claims if c.text not in set(unsupported)]
     if not kept_claims:
@@ -76,6 +119,7 @@ def repair(answer: GroundedAnswer, unsupported: list[str]) -> GroundedAnswer | N
     sentences = _SENTENCE.split(answer.answer.strip())
     bad_words = [_words(u) for u in unsupported]
     kept: list[str] = []
+    dropped: list[str] = []
     for sentence in sentences:
         sw = _words(sentence)
         if not sw:
@@ -84,12 +128,29 @@ def repair(answer: GroundedAnswer, unsupported: list[str]) -> GroundedAnswer | N
         overlap = max(
             (len(sw & bw) / max(1, len(bw)) for bw in bad_words), default=0.0
         )
-        if overlap < 0.6:
-            kept.append(sentence)
+        (kept if overlap < SENTENCE_CARRIES_CLAIM else dropped).append(sentence)
 
     prose = " ".join(kept).strip()
     if not prose or len(_words(prose)) < 12:
         return None
+
+    # A supported claim can share a sentence with an unsupported one, in which
+    # case that sentence has just been removed underneath it. Reporting the
+    # claim anyway would leave `claims` naming something `answer` no longer
+    # says -- and the generator is told every claim must trace to a sentence in
+    # the answer, so a repaired answer has to hold to the same contract.
+    #
+    # Only a claim whose sentence demonstrably went is dropped. One the measure
+    # cannot place in either half is left alone: a paraphrase the overlap test
+    # fails to match is not evidence that anything was removed, and silently
+    # shedding claims would cost more than the inconsistency it avoids.
+    kept_claims = [
+        c for c in kept_claims
+        if _carried_by(c.text, kept) or not _carried_by(c.text, dropped)
+    ]
+    if not kept_claims:
+        return None
+
     return GroundedAnswer(answer=prose, claims=kept_claims, insufficient_context=False)
 
 
