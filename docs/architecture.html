@@ -1279,7 +1279,108 @@ asked to <em>write</em> something. Every call that <em>judges</em> is narrowed t
 the smallest input sufficient for its decision.
 </p>
 
-<h2 class="break">15. Decisions worth knowing</h2>
+<h2 class="break">15. Initialisation and lifecycle</h2>
+
+<p>
+&sect;&nbsp;5 follows a question through the pipeline. This section answers a
+different question: what is constructed, and <em>when</em>. Almost nothing happens
+at import; the expensive work is deferred to the first request that needs it.
+</p>
+
+<h3>15.1 Three entry points, one module graph</h3>
+<table>
+  <tr><th style="width:22%">Entry</th><th style="width:26%">Command</th><th>First file</th></tr>
+  <tr><td>Vercel</td><td><span class="small muted">auto-detected</span></td><td><code>app.py</code> &mdash; puts <code>src/</code> on the path, re-exports <code>app</code></td></tr>
+  <tr><td>Local server</td><td class="k">rag-serve</td><td><code>api.py:main()</code> &rarr; uvicorn loads <code>rag_project.api:app</code></td></tr>
+  <tr><td>CLI</td><td class="k">rag ask &hellip;</td><td><code>cli.py:main()</code> &mdash; never touches FastAPI</td></tr>
+</table>
+
+<h3>15.2 What runs at import</h3>
+<p>
+One <code>import rag_project.api</code> pulls the whole graph, and these module
+bodies <em>execute</em> as it loads:
+</p>
+<table>
+  <tr><th style="width:30%">File</th><th>Executed at import</th></tr>
+  <tr><td class="k">policy.py</td><td>builds <code>SCOPE_STATEMENT</code> and the <code>REFUSALS</code> table</td></tr>
+  <tr><td class="k">generation/prompt.py</td><td><code>SYSTEM = SCOPE_STATEMENT + RULES</code> &mdash; the generator prompt is assembled once, here</td></tr>
+  <tr><td class="k">guardrails/input_gate.py</td><td>compiles every emergency and advice regex into <code>_COMPILED</code>; builds the classifier prompt</td></tr>
+  <tr><td class="k">guardrails/output_gate.py</td><td>compiles <code>_MARKER</code>, <code>_LIST_NUM</code>, <code>_NUMBER</code>, <code>_GROUPING</code>, <code>_SENTENCE</code></td></tr>
+  <tr><td class="k">retrieval/rewrite.py</td><td>builds the abbreviation glossary and the <code>AMBIGUOUS</code> set</td></tr>
+  <tr><td class="k">db/__init__.py</td><td>imports the repositories &mdash; <strong>opens no connection</strong></td></tr>
+  <tr><td class="k">api.py:52</td><td><code>app = FastAPI(...)</code>, the ASGI object Vercel looks for</td></tr>
+  <tr><td class="k">api.py:63-703</td><td>every route decorator fires as the body executes, registering handlers</td></tr>
+  <tr><td class="k">api.py:704</td><td><code>app.include_router(api)</code> &mdash; the last line of the module, mounting <code>/api/*</code></td></tr>
+</table>
+<p>
+Nothing else. No database connection, no Redis client, no OpenAI client, no corpus,
+no BM25 index. An instance that only serves <code>/health</code> pays none of it.
+</p>
+
+<h3>15.3 What is built lazily, and in what order</h3>
+<p>Each singleton is constructed on first use, so the order is demand-driven:</p>
+<table>
+  <tr><th style="width:26%">Singleton</th><th style="width:28%">First triggered by</th><th>What it costs</th></tr>
+  <tr><td class="k">get_settings()</td><td>the first call anywhere</td>
+      <td><code>@lru_cache</code>. Reads <code>.env</code>, then <code>load_calibration()</code> reads <code>calibration.json</code> &mdash; <strong>this is the moment 5.5 replaces the 5.0 default</strong>. Everything below calls it first.</td></tr>
+  <tr><td class="k">get_db()</td><td>the first request needing a user</td>
+      <td>Opens the psycopg pool (<code>min_size=0</code>), then <code>_create_schema()</code> and <code>_migrate()</code>. The schema is created <em>on first database touch</em>, not at deploy &mdash; which is why no migration step has to run before a deploy serves traffic.</td></tr>
+  <tr><td class="k">get_cache()</td><td>the first cache read</td>
+      <td>Cheap. The Redis client itself is built later still, inside <code>_redis()</code>.</td></tr>
+  <tr><td class="k">_assistant()</td><td>the first <code>/api/ask</code></td>
+      <td><strong>The expensive one.</strong> See below.</td></tr>
+</table>
+
+<pre>_assistant()                          api.py:66   @lru_cache
+  └─ Assistant.build()
+       └─ HybridRetriever()            search.py:30
+            ├─ load_chunks()           pipeline.py:109   reads every data/chunks/*.jsonl,
+            │                                            parses 3,547 Chunk objects
+            ├─ BM25Index(chunks)       bm25.py:31        tokenises all 3,547 into memory
+            ├─ get_store()             store.py:190
+            └─ Embedder()              embed.py:38       builds the OpenAI client;
+                                                         raises if the key is missing</pre>
+
+<h3>15.4 Measured cost</h3>
+<table>
+  <tr><th style="width:38%">Stage</th><th style="width:18%">Time</th><th>Peak RSS</th></tr>
+  <tr><td>First-ever import <span class="small muted">(bytecode compile, cold FS)</span></td><td class="n">~8.6 s</td><td class="n">131 MB</td></tr>
+  <tr><td><code>import rag_project.api</code> <span class="small muted">(warm)</span></td><td class="n">1.03 s</td><td class="n">123 MB</td></tr>
+  <tr><td><code>load_chunks()</code> &mdash; 3,547 chunks</td><td class="n">0.33 s</td><td class="n">+7 MB</td></tr>
+  <tr><td><code>BM25Index(chunks)</code></td><td class="n">0.28 s</td><td class="n">+43 MB</td></tr>
+  <tr><td><code>Assistant.build()</code> total</td><td class="n">0.32 s</td><td class="n">177 MB</td></tr>
+  <tr><td><strong>Cold path to first answer</strong></td><td class="n"><strong>1.35 s</strong></td><td class="n"><strong>177 MB</strong></td></tr>
+</table>
+<p>
+Half the warm import is one dependency. <code>python -X importtime</code> attributes
+510 ms of the 1,031 ms to <code>rag_project.llm</code>, essentially all of which is
+<code>import openai</code>; FastAPI accounts for a further 208 ms. So the corpus and
+the BM25 index &mdash; the parts that look expensive &mdash; are together cheaper
+than importing the OpenAI SDK.
+</p>
+<p class="small muted">
+Measured on the development machine, warm, single process. Treat them as relative
+weights rather than production figures: a serverless instance compiling bytecode
+for the first time pays something closer to the 8.6&nbsp;s row.
+</p>
+
+<h3>15.5 The CLI does not share any of this</h3>
+<p>
+<code>cli.py</code> calls <code>Assistant.build()</code> directly (line 161) rather
+than going through <code>api.py</code>'s <code>@lru_cache</code>. There is no
+FastAPI app, no dependency chain, no authentication and no rate limiting &mdash; the
+same pipeline, called in process.
+</p>
+<div class="note">
+  <div class="t">The consequence worth knowing</div>
+  The server builds the BM25 index <strong>once per instance</strong>;
+  <code>rag ask</code> rebuilds it <strong>on every invocation</strong>, because
+  there is no process to cache it in. That is most of the CLI's startup latency, and
+  it is why <code>rag eval run</code> over 34 cases costs more than the per-question
+  figures suggest.
+</div>
+
+<h2 class="break">16. Decisions worth knowing</h2>
 <ul>
   <li><strong>Rank fusion, not score fusion.</strong> Dense distances and BM25 scores
       are not on a comparable scale, so hybrid retrieval fuses on rank.</li>

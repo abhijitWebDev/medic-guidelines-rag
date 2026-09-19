@@ -1,5 +1,5 @@
 {
-  "confidence_threshold": 5.5,
+  "confidence_threshold": 7.5,
   "scores": {
     "answerable": [
       10.0,
@@ -18,5 +18,7 @@
       0.0,
       0.0
     ]
-  }
+  },
+  "corrective_threshold": 6.0,
+  "_note": "Thresholds raised deliberately for a medical domain: pass at 7.5, corrective band 6.0-7.5. These are a policy floor, not the value `rag eval calibrate` measured (that sweep returned 5.5 as the midpoint of a 0.5-10.0 band it could not narrow). `rag eval calibrate --write` rewrites this file and will drop both keys -- re-apply after any such run."
 }

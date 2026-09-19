@@ -166,7 +166,7 @@ class Settings(BaseSettings):
     rerank_top_n: int = 6
     # Gate 2. Provisional -- overwritten by data/calibration.json once the
     # eval harness has actually measured it. Never trust this default.
-    confidence_threshold: float = 5.0
+    confidence_threshold: float = 7.5
 
     # --- Corrective retrieval (gate 2 middle band) -----------------------
     # Below confidence_threshold but at or above this floor, gate 2 returns
@@ -178,7 +178,7 @@ class Settings(BaseSettings):
     # reranker's scale 4-6 is "related topic, contains part of the answer",
     # which is the range worth a second attempt. Below it, retrieval is not in
     # the right neighbourhood and a retry only spends money to refuse later.
-    corrective_threshold: float = 3.0
+    corrective_threshold: float = 6.0
     # The retry goes deeper: chunks fused into ranks 21-40 were never scored by
     # the reranker at all, so this is recall the first pass could not have had.
     corrective_k: int = 40
